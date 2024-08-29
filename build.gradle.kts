@@ -138,6 +138,16 @@ tasks.register<JavaExec>("runJar") {
     jvmArgs = listOf("-Djava.library.path=$buildDir/natives-windows/x64/org/lwjgl")
 }
 
+tasks.register<Copy>("copySources") {
+    from("src/main/java")
+    into("$buildDir/classes/java/main")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 tasks.build {
-    dependsOn("copyNatives")
+    dependsOn("copyNatives", "copySources")
+}
+
+tasks.jar {
+    dependsOn("copyNatives", "copySources")
 }
