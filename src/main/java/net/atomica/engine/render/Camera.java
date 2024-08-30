@@ -4,7 +4,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 public class Camera {
-    Vector3f position;
+    public Vector3f position;
     private float pitch, yaw, roll;
 
     public Camera(Vector3f position, float pitch, float yaw, float roll) {
