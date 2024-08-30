@@ -2,17 +2,18 @@ package net.atomica.engine.render;
 
 import net.atomica.Main;
 import net.atomica.engine.display.DisplayManager;
+import net.atomica.engine.logic.KeyPressEvent;
 import net.atomica.engine.models.Sphere;
 import net.atomica.engine.shaders.ShaderManager;
-import net.atomica.logging.Logger;
+import net.atomica.engine.logic.EventManager;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.BufferUtils;
+import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWKeyCallback;
 import org.lwjgl.opengl.GL11;
 
 import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.FloatBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,15 +22,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class RenderEngine {
-    private ShaderManager shader;
-    private Camera camera;
-    private DisplayManager displayManager;
+    public ShaderManager shader;
+    public Camera camera;
+    public DisplayManager displayManager;
 
     public RenderEngine() {
         this.displayManager = new DisplayManager(1280, 720, "Atomica");
         displayManager.createDisplay();
         this.camera = new Camera(new Vector3f(0, 0, 3), 0, 0, 0);
         this.shader = new ShaderManager(loadShader("vertex_shader"), loadShader("fragment_shader"));
+        GLFW.glfwSetKeyCallback(displayManager.getWindow(), new GLFWKeyCallback() {
+            @Override
+            public void invoke(long window, int key, int scancode, int action, int mods) {
+                if (action == GLFW.GLFW_PRESS) {
+                    EventManager.fireEvent(new KeyPressEvent(key));
+                }
+            }
+        });
     }
 
     public void run() {
@@ -42,17 +51,20 @@ public class RenderEngine {
 
         Mesh mesh = new Mesh(vertices, indices);
         Texture texture = new Texture(Main.assetsDir.getPath() + "/textures/essential.png");
-        Model sphereModel = new Model(mesh, texture);
+        Model sphereModel = new Model(mesh, texture, new Vector3f(0, 0, 0), new Vector3f(0, 0, 0), new Vector3f(1, 1, 1));
 
         while (!displayManager.shouldClose()) {
+
             clear();
 
             Matrix4f projectionMatrix = new Matrix4f().perspective(
-                    (float) Math.toRadians(45.0f),
-                    1280f / 720f,
+                    (float) Math.toRadians(60.0f),//FOV
+                    (float) displayManager.getWidth() / displayManager.getHeight(),
                     0.1f,
                     1000f
             );
+
+            sphereModel.rotation.y += 0.1f;
 
             List<Model> models = new ArrayList<>();
             models.add(sphereModel);
@@ -78,13 +90,12 @@ public class RenderEngine {
         projectionMatrix.get(projectionBuffer);
         shader.setUniformMatrix4fv("projection", projectionBuffer);
 
-        shader.setUniform3f("lightPos", 0.0f, 10.0f, 0.0f);
-        shader.setUniform3f("viewPos", camera.position.x, camera.position.y, camera.position.z);
-        shader.setUniform3f("lightColor", 1.0f, 1.0f, 1.0f);
+//        shader.setUniform3f("lightPos", 0.0f, 10.0f, 0.0f);
+//        shader.setUniform3f("viewPos", camera.position.x, camera.position.y, camera.position.z);
+//        shader.setUniform3f("lightColor", 1.0f, 1.0f, 1.0f);
 
-        // Render all models
         for (Model model : models) {
-            model.render();
+            model.render(shader);
         }
 
         shader.unbind();
@@ -92,6 +103,7 @@ public class RenderEngine {
 
     public static void clear() {
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+        GL11.glClearColor(0.53f, 0.81f, 0.92f, 1.0f);
     }
 
     private String loadShader(String name) {

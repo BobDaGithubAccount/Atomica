@@ -1,6 +1,5 @@
 package net.atomica.engine.render;
 
-import net.atomica.engine.shaders.ShaderManager;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
@@ -49,14 +48,6 @@ public class Mesh {
 
         MemoryUtil.memFree(vertexBuffer);
         MemoryUtil.memFree(indicesBuffer);
-    }
-
-    public int getVaoId() {
-        return vaoId;
-    }
-
-    public int getVertexCount() {
-        return vertexCount;
     }
 
     public void render() {

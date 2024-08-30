@@ -1,5 +1,6 @@
 package net.atomica;
 
+import net.atomica.engine.logic.EventManager;
 import net.atomica.engine.render.*;
 import net.atomica.logging.Logger;
 
@@ -21,6 +22,7 @@ public class Main {
 
     public static void main(String[] args) {
         Logger.setLogger(Logger.constructLogger("Atomica Engine"));
+        EventManager.init();
         Logger.log("Starting Atomica Engine...");
         copyAssets();
         RenderEngineContext = new RenderEngine();
