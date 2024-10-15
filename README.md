@@ -1,2 +1,2 @@
 # Atomica
-A molecular dynamics simulator implemented in rust
+A web based molecular dynamics simulator implemented in rust
