@@ -1,0 +1,25 @@
+{
+  "name": "atomica",
+  "version": "1.0.0",
+  "description": "A web based molecular dynamics simulator implemented in rust",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "run": "bash .github/workflows/run.sh",
+    "build": "bash .github/workflows/build.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BobDaGithubAccount/Atomica.git"
+  },
+  "keywords": [],
+  "author": "Stanley Howard",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/BobDaGithubAccount/Atomica/issues"
+  },
+  "homepage": "https://github.com/BobDaGithubAccount/Atomica#readme",
+  "dependencies": {
+    "express": "^4.21.1"
+  }
+}
