@@ -1,5 +1,4 @@
 bash .github/workflows/setup.sh
-pwd
 cd lib
 wasm-pack build --target web
 cd ..
