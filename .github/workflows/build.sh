@@ -1,3 +1,4 @@
+bash .github/workflows/setup.sh
 pwd
 cd lib
 ls
