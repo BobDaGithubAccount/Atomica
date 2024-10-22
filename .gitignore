@@ -23,3 +23,4 @@ lib/Cargo.lock
 
 dist/
 node_modules
+.idea
