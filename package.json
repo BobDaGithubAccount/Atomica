@@ -1,0 +1,15 @@
+{
+  "name": "src",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "src_bg.wasm",
+    "src.js",
+    "src.d.ts"
+  ],
+  "main": "src.js",
+  "types": "src.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
