@@ -1,19 +1,25 @@
 /* tslint:disable */
 /* eslint-disable */
+/**
+ * @param {number} width
+ * @param {number} height
+ */
+export function resize_callback(width: number, height: number): void;
 export function start(): void;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly resize_callback: (a: number, b: number) => void;
   readonly start: () => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
   readonly __wbindgen_export_3: WebAssembly.Table;
-  readonly closure93_externref_shim: (a: number, b: number, c: number) => void;
-  readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h402a72bdee56046a: (a: number, b: number) => void;
-  readonly closure192_externref_shim: (a: number, b: number, c: number) => void;
+  readonly closure55_externref_shim: (a: number, b: number, c: number) => void;
+  readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h8f413463dae40c44: (a: number, b: number) => void;
+  readonly closure196_externref_shim: (a: number, b: number, c: number) => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_exn_store: (a: number) => void;
