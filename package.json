@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "run": "bash .github/workflows/run.sh",
-    "build": "bash .github/workflows/build.sh"
+    "build": "bash .github/workflows/build.sh",
+    "quickrun": "bash .github/workflows/quick-build.sh && node index.js"
   },
   "repository": {
     "type": "git",
