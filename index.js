@@ -13,6 +13,8 @@ init().then(() => {
 
     console.log("Wasm module initialised!");
 
+});
+
     // if (typeof window.resize_callback === 'undefined' && typeof wasm_bindgen.resize_callback !== 'undefined') {
     //     console.log("Setting resize callback");
     //     window.resize_callback = wasm_bindgen.resize_callback;
@@ -38,5 +40,3 @@ init().then(() => {
     // }
 
     // window.addEventListener('load', resizeCanvas);
-
-});
