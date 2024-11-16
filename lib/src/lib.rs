@@ -1,5 +1,6 @@
 #![allow(special_module_name)]
 mod main;
+mod events;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
