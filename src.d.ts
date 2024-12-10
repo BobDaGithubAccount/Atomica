@@ -1,24 +1,26 @@
 /* tslint:disable */
 /* eslint-disable */
-export function initialize_event_listeners(): void;
+export function reset_camera(): void;
+export function update_camera_fov(fov: number): void;
 export function start(): void;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly initialize_event_listeners: () => void;
+  readonly reset_camera: () => void;
+  readonly update_camera_fov: (a: number) => void;
   readonly start: () => void;
+  readonly __wbindgen_exn_store: (a: number) => void;
+  readonly __externref_table_alloc: () => number;
+  readonly __wbindgen_export_2: WebAssembly.Table;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-  readonly __wbindgen_export_2: WebAssembly.Table;
-  readonly __wbindgen_export_3: WebAssembly.Table;
-  readonly closure104_externref_shim: (a: number, b: number, c: number) => void;
-  readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hfd4b0d764615503d: (a: number, b: number) => void;
-  readonly closure263_externref_shim: (a: number, b: number, c: number) => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-  readonly __externref_table_alloc: () => number;
-  readonly __wbindgen_exn_store: (a: number) => void;
+  readonly __wbindgen_export_6: WebAssembly.Table;
+  readonly closure145_externref_shim: (a: number, b: number, c: any) => void;
+  readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hb65794bc31b0989e: (a: number, b: number) => void;
+  readonly closure200_externref_shim: (a: number, b: number, c: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
