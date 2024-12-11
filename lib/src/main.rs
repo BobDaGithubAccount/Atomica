@@ -162,10 +162,9 @@ pub fn main() {
         let window = web_sys::window().unwrap();
         let document = window.document().unwrap();
         let canvas = document.get_element_by_id("canvas").unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
-        
-        let width: f64 = window.inner_width().unwrap().as_f64().unwrap() * 0.75;
-        let height: f64 = width * 10.0 / 16.0;
-
+        let width = canvas.client_width() as f64;
+        let height = canvas.client_height() as f64;
+    
         winit::window::WindowBuilder::new()
             .with_canvas(Some(canvas))
             .with_inner_size(winit::dpi::LogicalSize::new(width, height))
