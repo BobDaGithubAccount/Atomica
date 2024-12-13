@@ -24,3 +24,4 @@ lib/Cargo.lock
 dist/
 node_modules
 .idea
+lib/src/command_macro/target

@@ -1,5 +1,5 @@
-import init, * as wasm_bindgen from './src.js';
-import { reset_camera, update_camera_fov } from './src.js';
+import init, * as wasm_bindgen from './atomica_lib.js';
+import { handle_command } from './atomica_lib.js';
 
 function jsInit() {
     console.log("Wasm module initialized");
@@ -13,6 +13,7 @@ function jsInit() {
         if (command) {
             log(`User command: ${command}`);
             commandInput.value = '';
+            handle_command_js(command);
         }
     });
 
@@ -23,7 +24,12 @@ function jsInit() {
     });
 }
 
+function handle_command_js(command) {
+    handle_command(command);
+}
+
 function log(message) {
+    console.log(message);
     const logArea = document.getElementById('log-area');
     const timestamp = new Date().toLocaleTimeString();
     logArea.innerHTML += `[${timestamp}] ${message}<br>`;
@@ -35,9 +41,9 @@ init().then(() => {
 }).catch(err => {
     console.error("Fake error initializing wasm module:", err);
     try {
-        console.log("Second round of initialization successful! (Control flow error warning bypassed");
+        console.log("Second round of initialization successful! (Control flow error warning bypassed)");
         jsInit();
     } catch (err) {
-        console.error("Real error initializing wasm module:", err);
+        log("Real error initializing wasm module: " + err);
     }
 });

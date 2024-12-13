@@ -1,5 +1,5 @@
 [package]
-name = "src"
+name = "atomica_lib"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,6 +12,10 @@ log = "0.4"
 winit = "0.28"
 lazy_static = "1.4.0"
 cgmath = "0.18"
+ctor = "0.1"
+console_error_panic_hook = "0.1"
+console_log = "1"
+linkme = "0.3.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
