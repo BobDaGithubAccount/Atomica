@@ -1,14 +1,14 @@
 {
-  "name": "src",
+  "name": "atomica_lib",
   "type": "module",
   "version": "0.1.0",
   "files": [
-    "src_bg.wasm",
-    "src.js",
-    "src.d.ts"
+    "atomica_lib_bg.wasm",
+    "atomica_lib.js",
+    "atomica_lib.d.ts"
   ],
-  "main": "src.js",
-  "types": "src.d.ts",
+  "main": "atomica_lib.js",
+  "types": "atomica_lib.d.ts",
   "sideEffects": [
     "./snippets/*"
   ]
