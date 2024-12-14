@@ -150,15 +150,36 @@ pub fn log(message: String) {
 pub fn register_commands() {
     register_command!("reset_camera", reset_camera_command);
     register_command!("fov", update_camera_fov_command);
+
 }
 
 fn reset_camera_command(args: Vec<String>) {
-    if(args.len() != 0) {
+    if args.len() != 0 {
         log(format!("Invalid number of arguments for reset_camera_command"));
         return;
     }
-    log(format!("Resetting camera: {:?}", args));
-    //TODO: Implement reset camera logic
+    log(format!("Resetting camera to default settings"));
+    if let Some(mut camera) = CAMERA_INSTANCE.lock().unwrap().as_mut() {
+        let default_position = vec3(0.0, 2.0, 4.0);
+        let default_target = vec3(0.0, 0.0, 0.0);
+        let default_up = vec3(0.0, 1.0, 0.0);
+        let default_fov = 45.0;
+        let default_z_near = 0.1;
+        let default_z_far = 100.0;
+        *camera = Camera::new_perspective(
+            camera.viewport().clone(),
+            default_position,
+            default_target,
+            default_up,
+            degrees(default_fov),
+            default_z_near,
+            default_z_far,
+        );
+        log(format!("Camera reset to default position: {:?}, target: {:?}, FOV: {} degrees", 
+            default_position, default_target, default_fov));
+    } else {
+        log(format!("Camera instance not initialized"));
+    }
 }
 
 fn update_camera_fov_command(args: Vec<String>) {
