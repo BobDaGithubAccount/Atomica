@@ -1,7 +1,6 @@
 #![allow(special_module_name)]
 
 pub mod commands;
-use crate::commands::Command;
 
 use wasm_bindgen::prelude::*;
 
@@ -18,8 +17,6 @@ lazy_static! {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
-    use commands::register_command;
-
     console_log::init_with_level(log::Level::Debug).unwrap();
     info!("Logging works!");
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -150,7 +147,7 @@ pub fn log(message: String) {
 pub fn register_commands() {
     register_command!("reset_camera", reset_camera_command, "Reset camera to default settings", "reset_camera");
     register_command!("fov", update_camera_fov_command, "Update camera field of view (FOV)", "fov <degrees>");
-
+    commands::init();
 }
 
 fn reset_camera_command(args: Vec<String>) {
