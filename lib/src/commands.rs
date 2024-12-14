@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use lazy_static::lazy_static;
 use crate::log;
 
+#[derive(Clone)]
 pub struct Command {
     pub name: &'static str,
     pub func: fn(Vec<String>),
@@ -34,19 +35,26 @@ pub fn init() {
     register_command!("help", help_command, "Prints help information", "help [command]");
 }
 
+//TODO FIX LOCKING ISSUES WITH COMMAND REGISTRY
 fn help_command(args: Vec<String>) {
     let registry = COMMAND_REGISTRY.lock().unwrap();
+    let mut log_messages = Vec::new();
+    log(format!("Help:"));
     if args.is_empty() {
         for command in registry.values() {
-            log(format!("{}: {} | {}", command.name, command.help, command.usage));
+            log_messages.push(format!("{}: {} | {}", command.name, command.help, command.usage));
         }
     } else {
         for arg in args {
             if let Some(command) = registry.get(&arg[..]) {
-                log(format!("{}: {} | {}", command.name, command.help, command.usage));
+                log_messages.push(format!("{}: {} | {}", command.name, command.help, command.usage));
             } else {
-                log(format!("Command not found: {}", arg));
+                log_messages.push(format!("Command not found: {}", arg));
             }
         }
+    }
+
+    for message in log_messages {
+        log(message);
     }
 }

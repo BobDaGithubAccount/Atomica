@@ -146,7 +146,7 @@ pub fn log(message: String) {
 
 pub fn register_commands() {
     register_command!("reset_camera", reset_camera_command, "Reset camera to default settings", "reset_camera");
-    register_command!("fov", update_camera_fov_command, "Update camera field of view (FOV)", "fov <degrees>");
+    register_command!("fov", update_camera_fov_command, "Update camera field of view (FOV)", "fov [degrees]");
     commands::init();
 }
 
@@ -226,8 +226,12 @@ pub fn handle_command(command_line: &str) {
     let command_name = parts[0];
     let args: Vec<String> = parts[1..].iter().map(|&s| s.to_string()).collect();
 
-    let registry = commands::COMMAND_REGISTRY.lock().unwrap();
-    if let Some(command) = registry.get(command_name) {
+    let registry_clone = {
+        let registry = commands::COMMAND_REGISTRY.lock().unwrap();
+        registry.clone()
+    };
+
+    if let Some(command) = registry_clone.get(command_name) {
         (command.func)(args);
     } else {
         log(format!("Command not found: {}", command_name));
