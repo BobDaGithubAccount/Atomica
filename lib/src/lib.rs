@@ -148,8 +148,8 @@ pub fn log(message: String) {
 }
 
 pub fn register_commands() {
-    register_command!("reset_camera", reset_camera_command);
-    register_command!("fov", update_camera_fov_command);
+    register_command!("reset_camera", reset_camera_command, "Reset camera to default settings", "reset_camera");
+    register_command!("fov", update_camera_fov_command, "Update camera field of view (FOV)", "fov <degrees>");
 
 }
 
