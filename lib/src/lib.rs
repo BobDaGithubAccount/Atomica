@@ -143,16 +143,44 @@ fn reset_camera_command(args: Vec<String>) {
         return;
     }
     log::info!("Resetting camera: {:?}", args);
-    // Implement reset camera logic
+    //TODO: Implement reset camera logic
 }
 
 fn update_camera_fov_command(args: Vec<String>) {
-    if(args.len() != 1) {
+    if args.len() != 1 {
         log::warn!("Invalid number of arguments for update_camera_fov_command");
         return;
     }
-    log::info!("Updating camera FOV: {:?}", args);
-    // Implement update FOV logic
+
+    match args[0].parse::<f32>() {
+        Ok(fov_degrees) if fov_degrees > 0.0 && fov_degrees < 180.0 => {
+            if let Some(mut camera) = CAMERA_INSTANCE.lock().unwrap().as_mut() {
+                let current_viewport = camera.viewport().clone();
+                let current_position = *camera.position();
+                let current_target = *camera.target();
+                let current_up = *camera.up();
+                let current_z_near = camera.z_near();
+                let current_z_far = camera.z_far();
+
+                *camera = Camera::new_perspective(
+                    current_viewport,
+                    current_position,
+                    current_target,
+                    current_up,
+                    degrees(fov_degrees),
+                    current_z_near,
+                    current_z_far,
+                );
+
+                log::info!("Camera FOV updated to {} degrees", fov_degrees);
+            } else {
+                log::warn!("Camera instance not initialized");
+            }
+        }
+        _ => {
+            log::warn!("Invalid FOV value: {:?}", args[0]);
+        }
+    }
 }
 
 #[wasm_bindgen]
