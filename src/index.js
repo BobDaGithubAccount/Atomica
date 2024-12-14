@@ -1,5 +1,5 @@
 import init, * as wasm_bindgen from './atomica_lib.js';
-import { handle_command } from './atomica_lib.js';
+import { handle_command, log } from './atomica_lib.js';
 
 function jsInit() {
     console.log("Wasm module initialized");
@@ -26,14 +26,6 @@ function jsInit() {
 
 function handle_command_js(command) {
     handle_command(command);
-}
-
-function log(message) {
-    console.log(message);
-    const logArea = document.getElementById('log-area');
-    const timestamp = new Date().toLocaleTimeString();
-    logArea.innerHTML += `[${timestamp}] ${message}<br>`;
-    logArea.scrollTop = logArea.scrollHeight;
 }
 
 init().then(() => {

@@ -6,6 +6,7 @@ use crate::commands::Command;
 use wasm_bindgen::prelude::*;
 
 use three_d::{renderer::*, FrameInputGenerator, SurfaceSettings, WindowedContext};
+use web_sys::HtmlElement;
 use std::sync::Mutex;
 use lazy_static::lazy_static;
 use log::info;
@@ -132,6 +133,20 @@ pub fn main() {
     });
 }
 
+#[wasm_bindgen]
+pub fn log(message: String) {
+    info!("{}", message);
+    let document = web_sys::window().unwrap().document().unwrap();
+    let log_area = document.get_element_by_id("log-area")
+        .unwrap()
+        .dyn_into::<HtmlElement>()
+        .unwrap();
+    let timestamp = js_sys::Date::new_0().to_locale_time_string("en-GB");
+    let formatted_message = format!("[{}] {}", timestamp, message);
+    log_area.set_inner_html(&format!("{}<br>{}", log_area.inner_html(), formatted_message));
+    log_area.set_scroll_top(log_area.scroll_height());  // This scrolls to the bottom
+}
+
 pub fn register_commands() {
     register_command!("reset_camera", reset_camera_command);
     register_command!("fov", update_camera_fov_command);
@@ -139,16 +154,16 @@ pub fn register_commands() {
 
 fn reset_camera_command(args: Vec<String>) {
     if(args.len() != 0) {
-        log::warn!("Invalid number of arguments for reset_camera_command");
+        log(format!("Invalid number of arguments for reset_camera_command"));
         return;
     }
-    log::info!("Resetting camera: {:?}", args);
+    log(format!("Resetting camera: {:?}", args));
     //TODO: Implement reset camera logic
 }
 
 fn update_camera_fov_command(args: Vec<String>) {
     if args.len() != 1 {
-        log::warn!("Invalid number of arguments for update_camera_fov_command");
+        log(format!("Invalid number of arguments for update_camera_fov_command"));
         return;
     }
 
@@ -172,13 +187,13 @@ fn update_camera_fov_command(args: Vec<String>) {
                     current_z_far,
                 );
 
-                log::info!("Camera FOV updated to {} degrees", fov_degrees);
+                log(format!("Camera FOV updated to {} degrees", fov_degrees));
             } else {
-                log::warn!("Camera instance not initialized");
+                log(format!("Camera instance not initialized"));
             }
         }
         _ => {
-            log::warn!("Invalid FOV value: {:?}", args[0]);
+            log(format!("Invalid FOV value: {:?}", args[0]));
         }
     }
 }
@@ -187,7 +202,7 @@ fn update_camera_fov_command(args: Vec<String>) {
 pub fn handle_command(command_line: &str) {
     let parts: Vec<&str> = command_line.split_whitespace().collect();
     if parts.is_empty() {
-        log::warn!("No command entered");
+        log(format!("No command entered"));
         return;
     }
     let command_name = parts[0];
@@ -197,6 +212,6 @@ pub fn handle_command(command_line: &str) {
     if let Some(command) = registry.get(command_name) {
         (command.func)(args);
     } else {
-        log::warn!("Command not found: {}", command_name);
+        log(format!("Command not found: {}", command_name));
     }
 }
