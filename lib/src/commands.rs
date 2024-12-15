@@ -35,7 +35,6 @@ pub fn init() {
     register_command!("help", help_command, "Prints help information", "help [command]");
 }
 
-//TODO FIX LOCKING ISSUES WITH COMMAND REGISTRY
 fn help_command(args: Vec<String>) {
     let registry = COMMAND_REGISTRY.lock().unwrap();
     let mut log_messages = Vec::new();
