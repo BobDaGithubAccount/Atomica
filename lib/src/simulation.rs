@@ -1,40 +1,38 @@
 use std::sync::Mutex;
 use lazy_static::lazy_static;
+use serde::{Serialize, Deserialize};
 
 lazy_static! {
     pub static ref SIMULATION_STATE: Mutex<SimulationState> = Mutex::new(SimulationState::default());
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SimulationStatus {
     Running,
     Completed,
     Failed,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Nucleus {
     pub species: String,
     pub atomic_number: u32,
     pub coordinates: [f64; 3],
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulationState {
-    pub simulation_time: f64, //Current simulation time in atomic units in a.u.
-    pub time_step: f64,       //Time-step size in a.u.
-    pub total_time: f64,      //Total simulation time in a.u.
-    pub atomic_coordinates: Vec<Nucleus>, //Atomic coordinates with species and atomic number
-    pub grid_spacing: [f64; 3],           //Grid spacing in R^3
-    pub bounds: [[f64; 2]; 3],            //Bounds of the simulation in R^3
-    pub density_matrix: Vec<Vec<f64>>,    //Time-dependent density matrix
-    pub status: SimulationStatus,         //Status of the simulation
-    pub file_context: Option<String>,     //Can be written to as if it were a file (this can be handled separately)
+    pub total_time: f64,  // Total simulation time in a.u.
+    pub atomic_coordinates: Vec<Nucleus>, // Atomic coordinates with species and atomic number
+    pub grid_spacing: [f64; 3],           // Grid spacing in R^3
+    pub bounds: [[f64; 2]; 3],            // Bounds of the simulation in R^3
+    pub density_matrix: Vec<Vec<f64>>,    // Time-independent density matrix
+    pub status: SimulationStatus,         // Status of the simulation
+    pub file_context: Option<String>,     // Can be written to as if it were a file (this can be handled separately)
 }
 
 impl SimulationState {
     pub fn new(
-        time_step: f64,
         total_time: f64,
         nucleus_locations: Vec<Nucleus>,
         grid_spacing: [f64; 3],
@@ -43,8 +41,6 @@ impl SimulationState {
         status: SimulationStatus,
     ) -> Self {
         let state = SimulationState {
-            simulation_time: 0.0,
-            time_step,
             total_time,
             atomic_coordinates: nucleus_locations,
             grid_spacing,
@@ -90,9 +86,8 @@ impl SimulationState {
 
     pub fn print_summary(&self) -> String {
         let summary = format!(
-            "Simulation State:\n  Simulation Time: {:.3} / {:.3} a.u.\n  Time Step: {:.3} a.u.\n  Status: {:?}\n  Grid Spacing: ({:.3}, {:.3}, {:.3}) a.u.\n  Bounds: x({:.3}, {:.3}), y({:.3}, {:.3}), z({:.3}, {:.3}) a.u.",
-            self.simulation_time, self.total_time,
-            self.time_step,
+            "Simulation State:\n  Total Time: {:.3} a.u.\n  Status: {:?}\n  Grid Spacing: ({:.3}, {:.3}, {:.3}) a.u.\n  Bounds: x({:.3}, {:.3}), y({:.3}, {:.3}), z({:.3}, {:.3}) a.u.",
+            self.total_time,
             self.status,
             self.grid_spacing[0], self.grid_spacing[1], self.grid_spacing[2],
             self.bounds[0][0], self.bounds[0][1],
@@ -106,8 +101,6 @@ impl SimulationState {
 impl Default for SimulationState {
     fn default() -> Self {
         SimulationState {
-            simulation_time: 0.0,
-            time_step: 0.01,
             total_time: 1.0,
             atomic_coordinates: Vec::new(),
             grid_spacing: [1.0, 1.0, 1.0],
@@ -118,6 +111,3 @@ impl Default for SimulationState {
         }
     }
 }
-
-//TODO: In future replace this with a state which is suitable as a placeholder
-//This is just so there is always a state to work with

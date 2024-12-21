@@ -3,6 +3,7 @@
 pub mod commands;
 pub mod renderer;
 pub mod simulation;
+pub mod dft_simulator;
 
 use wasm_bindgen::prelude::*;
 
@@ -38,6 +39,7 @@ pub fn log(message: String) {
 pub fn register_commands() {
     register_command!("reset_camera", reset_camera_command, "Reset camera to default settings", "reset_camera");
     register_command!("fov", update_camera_fov_command, "Update camera field of view (FOV)", "fov [degrees]");
+    register_command!("run_dft", dft_simulator::run_scf_command, "Run self-consistent field (SCF) simulation of KS-DFT", "run_dft");
     commands::init();
 }
 
