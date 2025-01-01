@@ -1,14 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation, FFMpegWriter
 
 # Constants
-TOLERANCE = 1e-6
+TOLERANCE = 1e-3
 MAX_ITERATIONS = 1000
 
-def gaussian_basis(x, center, alpha):
-    """Define a Gaussian-type orbital."""
-    return np.exp(-alpha * (x - center)**2)
+def gaussian_basis(r, center, alpha):
+    """Define a 3D Gaussian-type orbital."""
+    return np.exp(-alpha * np.sum((r - center)**2, axis=-1))
 
 def build_overlap_matrix(grid, centers, alphas):
     """Build the overlap matrix."""
@@ -32,9 +33,9 @@ def build_hamiltonian(grid, density, centers, alphas, external_potential):
     xc_potential = lda_exchange_correlation(density)
 
     # Coulomb potential (Hartree potential)
-    coulomb_potential = np.zeros_like(grid)
+    coulomb_potential = np.zeros_like(density)
     for i in range(len(grid)):
-        coulomb_potential[i] = np.sum(density / np.abs(grid[i] - grid + 1e-10))
+        coulomb_potential[i] = np.sum(density / (np.linalg.norm(grid[i] - grid, axis=-1) + 1e-10))
 
     # Hamiltonian
     hamiltonian = np.zeros((n_basis, n_basis))
@@ -47,41 +48,47 @@ def build_hamiltonian(grid, density, centers, alphas, external_potential):
             )
     return hamiltonian
 
+def calculate_density(grid, eigenvectors, centers, alphas, num_electrons):
+    """Calculate the electron density considering orbital occupancy."""
+    new_density = np.zeros(len(grid))
+    occupancies = np.zeros(len(eigenvectors[0]))  # Initialize occupancy for each orbital
+
+    # Determine occupancies based on the number of electrons
+    for i in range(num_electrons):
+        occupancies[i % len(occupancies)] += 1
+
+    # Calculate the density
+    for orbital_idx, occupancy in enumerate(occupancies):
+        if occupancy == 0:
+            continue
+        orbital_vector = eigenvectors[:, orbital_idx]
+        for i, r in enumerate(grid):
+            for j, center in enumerate(centers):
+                new_density[i] += occupancy * orbital_vector[j] * gaussian_basis(r, center, alphas[j])
+    
+    new_density **= 2  # Square to get density
+    new_density /= np.sum(new_density)  # Normalize so integral of density corresponds with number of electrons
+    return new_density
+
 def scf_loop(grid, centers, alphas, external_potential, num_electrons, frame_callback):
     """Self-consistent field loop."""
-    density = np.ones_like(grid) * 0.1  # Initial density guess
-    damping_factor = 0.1  # Damping to stabilize convergence
-
+    density = np.ones(len(grid)) * 0.1  # Initial density guess
+    damping_factor = 0.25  # Damping to stabilize convergence
     for iteration in range(MAX_ITERATIONS):
-        # Build the Hamiltonian matrix
+        print(f"Iteration {iteration + 1}...")
         hamiltonian = build_hamiltonian(grid, density, centers, alphas, external_potential)
         eigenvalues, eigenvectors = np.linalg.eigh(hamiltonian)
+        print(f"Eigenvalues: {eigenvalues[:num_electrons]}")
 
-        # Debugging: Print eigenvalues
-        print(f"Iteration {iteration + 1}: Eigenvalues = {eigenvalues[:num_electrons]}")
-        print(f"Hamiltonian shape: {hamiltonian.shape}, Eigenvectors shape: {eigenvectors.shape}")
+        # Update density
+        new_density = calculate_density(grid, eigenvectors, centers, alphas, num_electrons)
 
-        # Ensure there are enough eigenvectors for all electrons
-        if eigenvectors.shape[1] < num_electrons:
-            raise ValueError("Not enough eigenvectors for the specified number of electrons. Increase the basis set size.")
-
-        # Update density using the lowest-energy eigenvectors
-        new_density = np.zeros_like(grid)
-        for electron_idx in range(num_electrons):
-            lowest_vector = eigenvectors[:, electron_idx]
-            print(f"lowest_vector norm (electron {electron_idx}): {np.linalg.norm(lowest_vector)}")
-            for i, x in enumerate(grid):
-                for j, center in enumerate(centers):
-                    new_density[i] += lowest_vector[j] * gaussian_basis(x, center, alphas[j])
-        new_density **= 2  # Square to get the density
-        new_density /= np.sum(new_density)  # Normalize
-
-        # Damping to stabilise convergence
+        # Apply damping to stabilize SCF convergence
         density = damping_factor * new_density + (1 - damping_factor) * density
 
         frame_callback(density)
 
-        # Check convergence
+        # Check for convergence
         if np.sum(np.abs(new_density - density)) < TOLERANCE:
             print(f"Converged in {iteration + 1} iterations.")
             return density, eigenvalues
@@ -90,57 +97,40 @@ def scf_loop(grid, centers, alphas, external_potential, num_electrons, frame_cal
     return density, None
 
 def create_animation(atomic_number, num_electrons):
-    fig, ax = plt.subplots()
-    grid = np.linspace(-5.0, 5.0, 100)
+    grid_points = 10
+    grid = np.array([(x, y, z) for x in np.linspace(-5, 5, grid_points)
+                                for y in np.linspace(-5, 5, grid_points)
+                                for z in np.linspace(-5, 5, grid_points)])
 
-    # Ensure enough basis functions for the number of electrons (by ensuring there's enough eigenstates)
-    num_basis_functions = max(num_electrons, 1)
-    centers = np.linspace(-2.0, 2.0, num_basis_functions)
-    alphas = [1.0] * len(centers)
+    centers = np.array([[0, 0, 0]])
+    alphas = [1.0]
 
-    # Define external potential based on the atomic number (Z) (coloumb potential)
-    external_potential = lambda x: -atomic_number / (np.abs(x) + 1e-10)
-
-    # Initialize visualization
-    im = ax.imshow(
-        np.zeros((100, 100)),
-        extent=(-5, 5, -5, 5),
-        origin="lower",
-        cmap="coolwarm",
-    )
-    cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label("Electron Density")
-
-    ax.set_title(f"Atomic Density: Z={atomic_number}, Electrons={num_electrons}")
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
+    external_potential = lambda r: -atomic_number / (np.linalg.norm(r, axis=-1) + 1e-10)
 
     frames = []
 
     def frame_callback(density):
-        frames.append(density.copy())
+        frames.append(density.reshape(grid_points, grid_points, grid_points))
 
-    def update(frame):
-        # Scale the color limits based on the current frame's statistics
-        current_density = frames[frame]
-        mean = np.mean(current_density)
-        std = np.std(current_density)
-        vmin = max(0, mean - 2 * std)
-        vmax = mean + 2 * std
-        im.set_clim(vmin, vmax)
-        im.set_array(np.outer(current_density, current_density))
-
-    # Run the SCF loop
     density, _ = scf_loop(grid, centers, alphas, external_potential, num_electrons, frame_callback)
 
-    ani = animation.FuncAnimation(fig, update, frames=len(frames), interval=100, repeat=False)
-    ani.save(f"atom_Z{atomic_number}_e{num_electrons}_density_animation.mp4", fps=10)
-    plt.show()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    def update(frame_idx):
+        ax.clear()
+        ax.set_title(f"Electron Density Frame {frame_idx}")
+        density = frames[frame_idx]
+        mean = np.mean(density)
+        std = np.std(density)
+        threshold = mean + 2 * std  # 2sigma threshold
+        ax.voxels(density > threshold, facecolors='blue', edgecolors='gray')
+
+    ani = FuncAnimation(fig, update, frames=len(frames), interval=100)
+
+    writer = FFMpegWriter(fps=10, bitrate=1800)
+    ani.save("electron_density.mp4", writer=writer)
+    print("Animation saved as electron_density.mp4.")
 
 if __name__ == "__main__":
-    # Example: Carbon atom (Z=6) with 6 electrons
     create_animation(atomic_number=1, num_electrons=2)
-
-
-
-    ##TODO ISSUE WITH CENTERS AND EIGENSTATES CAUSING WEIRD BEHAVIOUR
