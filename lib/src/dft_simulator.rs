@@ -1,171 +1,192 @@
-use ndarray::prelude::*;
-use nalgebra::{DMatrix, SymmetricEigen};
-
-use std::sync::Mutex;
-use lazy_static::lazy_static;
-use crate::simulation::{SimulationState, SIMULATION_STATE, SimulationStatus};
+use nalgebra::{DMatrix, Dynamic, MatrixMN, U1};
+use std::f32::consts::E;
 use crate::log;
 
-const TOLERANCE: f64 = 1e-6;
-const MAX_ITERATIONS: usize = 100;
+const TOLERANCE: f32 = 1e-3;
+const MAX_ITERATIONS: usize = 1000;
 
-// convert ndarray::Array2<f64> to a nalgebra::DMatrix<f64>
-fn to_dmatrix(arr: &Array2<f64>) -> Result<DMatrix<f64>, &'static str> {
-    if let Some(slice) = arr.as_slice() {
-        Ok(DMatrix::from_row_slice(arr.nrows(), arr.ncols(), slice))
-    } else {
-        Err("Non-contiguous data in Array2")
-    }
+#[derive(Debug)]
+pub struct DFTSolver {
+    pub frames: Vec<Vec<f32>>,
+    pub final_density: Vec<f32>,
+    pub eigenvalues: Option<Vec<f32>>,
 }
 
-// Define a Gaussian-type orbital
-fn gaussian_basis(x: f64, center: f64, alpha: f64) -> f64 {
-    (-alpha * (x - center).powi(2)).exp()
-}
-
-// Build the overlap matrix
-fn build_overlap_matrix(grid: &Array1<f64>, centers: &[f64], alphas: &[f64]) -> Array2<f64> {
-    let n_basis = centers.len();
-    let mut s = Array2::<f64>::zeros((n_basis, n_basis));
-    for i in 0..n_basis {
-        for j in 0..n_basis {
-            let integral = grid
-                .iter()
-                .map(|&x| {
-                    gaussian_basis(x, centers[i], alphas[i])
-                        * gaussian_basis(x, centers[j], alphas[j])
-                })
-                .sum::<f64>();
-            s[[i, j]] = integral;
+impl DFTSolver {
+    pub fn new() -> Self {
+        DFTSolver {
+            frames: Vec::new(),
+            final_density: Vec::new(),
+            eigenvalues: None,
         }
     }
-    s
-}
 
-// LDA Exchange-Correlation Potential
-fn lda_exchange_correlation(density: &Array1<f64>) -> Array1<f64> {
-    density.mapv(|rho| {
-        if rho > 0.0 {
-            -0.738558766 * rho.powf(1.0 / 3.0)
-        } else {
-            0.0
-        }
-    })
-}
-
-fn build_hamiltonian(
-    grid: &Array1<f64>,
-    density: &Array1<f64>,
-    centers: &[f64],
-    alphas: &[f64],
-    external_potential: &dyn Fn(f64) -> f64,
-) -> Array2<f64> {
-    let n_basis = centers.len();
-    let xc_potential = lda_exchange_correlation(density);
-
-    // Coulomb potential calculation (Hartree potential)
-    let mut coulomb_potential = Array1::<f64>::zeros(grid.len());
-    for i in 0..grid.len() {
-        let mut potential_sum = 0.0;
-        for j in 0..grid.len() {
-            if i != j {
-                let distance = (grid[i] - grid[j]).abs();
-                // Simple 1 / |r - r'|
-                potential_sum += density[j] / distance;
+    pub fn build_grid(&self, points_per_axis: usize) -> Vec<[f32; 3]> {
+        let mut grid = Vec::new();
+        for x in 0..points_per_axis {
+            for y in 0..points_per_axis {
+                for z in 0..points_per_axis {
+                    let xf = -10.0 + 20.0 * (x as f32 / (points_per_axis - 1) as f32);
+                    let yf = -10.0 + 20.0 * (y as f32 / (points_per_axis - 1) as f32);
+                    let zf = -10.0 + 20.0 * (z as f32 / (points_per_axis - 1) as f32);
+                    grid.push([xf, yf, zf]);
+                }
             }
         }
-        coulomb_potential[i] = potential_sum;
+        grid
     }
 
-    // Build Hamiltonian: ***H[i,j] = ∫ φ_i(x) * [V_ext(x) + V_xc(x) + V_coulomb(x)] * φ_j(x) dx***
-    let mut hamiltonian = Array2::<f64>::zeros((n_basis, n_basis));
-    for i in 0..n_basis {
-        for j in 0..n_basis {
-            let integral = grid
-                .iter()
-                .enumerate()
-                .map(|(idx, &x)| {
-                    gaussian_basis(x, centers[i], alphas[i])
-                        * gaussian_basis(x, centers[j], alphas[j])
-                        * (external_potential(x)
-                            + xc_potential[idx]
-                            + coulomb_potential[idx])
-                })
-                .sum::<f64>();
-            hamiltonian[[i, j]] = integral;
-        }
+    pub fn run_scf(
+        &mut self,
+        grid: &Vec<[f32; 3]>,
+        centers: &Vec<[f32; 3]>,
+        alphas: &Vec<f32>,
+        external_potential: &dyn Fn(&[[f32; 3]]) -> Vec<f32>,
+        num_electrons: usize,
+    ) {
+        let (dens, evals) = scf_loop(
+            grid,
+            centers,
+            alphas,
+            external_potential,
+            num_electrons,
+            &mut |d| {
+                self.frames.push(d.to_vec());
+            },
+        );
+        self.final_density = dens;
+        self.eigenvalues = evals;
     }
-
-    hamiltonian
 }
 
-// SELF CONSISTENT FIELD (SCF) LOOP
-fn scf_loop() -> Result<(), &'static str> {
-    // Grid and basis set
-    let grid: Array1<f64> = Array::linspace(-5.0, 5.0, 100);
-    let centers = vec![-1.0, 1.0]; // Basis function centers
-    let alphas = vec![1.0, 1.0];  // Basis function exponents
+/// Build the overlap matrix.
+fn build_overlap_matrix(grid: &Vec<[f32; 3]>, centers: &Vec<[f32; 3]>, alphas: &Vec<f32>) -> DMatrix<f32> {
+    let n_basis = centers.len();
+    let n_grid = grid.len();
+    let mut result = DMatrix::<f32>::zeros(n_basis, n_basis);
 
-    // Initial density (guess)
-    let mut density = Array1::<f64>::ones(grid.len()) * 0.1;
+    for i in 0..n_basis {
+        for j in 0..n_basis {
+            let mut s = 0.0_f32;
+            for k in 0..n_grid {
+                let dx_i = grid[k][0] - centers[i][0];
+                let dy_i = grid[k][1] - centers[i][1];
+                let dz_i = grid[k][2] - centers[i][2];
+                let g_i = (-alphas[i] * (dx_i * dx_i + dy_i * dy_i + dz_i * dz_i)).exp();
 
-    // Example external potential
-    let external_potential = |x: f64| -1.0 / (x.abs() + 0.1);
+                let dx_j = grid[k][0] - centers[j][0];
+                let dy_j = grid[k][1] - centers[j][1];
+                let dz_j = grid[k][2] - centers[j][2];
+                let g_j = (-alphas[j] * (dx_j * dx_j + dy_j * dy_j + dz_j * dz_j)).exp();
 
-    // Build overlap matrix
-    let s = build_overlap_matrix(&grid, &centers, &alphas);
+                s += g_i * g_j;
+            }
+            result[(i, j)] = s;
+        }
+    }
+    result
+}
+
+/// Update electron density.
+fn update_density(
+    grid: &Vec<[f32; 3]>,
+    eigenvectors: &DMatrix<f32>,
+    centers: &Vec<[f32; 3]>,
+    alphas: &Vec<f32>,
+    num_electrons: usize,
+) -> Vec<f32> {
+    let n_basis = centers.len();
+    let n_grid = grid.len();
+    let mut density = vec![0.0_f32; n_grid];
+
+    for (gid, point) in grid.iter().enumerate() {
+        let mut total_density = 0.0_f32;
+        let n_occ = num_electrons.min(eigenvectors.ncols());
+        for i in 0..n_occ {
+            let mut wavefunction_i = 0.0_f32;
+            for j in 0..n_basis {
+                let dx = point[0] - centers[j][0];
+                let dy = point[1] - centers[j][1];
+                let dz = point[2] - centers[j][2];
+                let g = (-alphas[j] * (dx * dx + dy * dy + dz * dz)).exp();
+                wavefunction_i += eigenvectors[(j, i)] * g;
+            }
+            total_density += wavefunction_i * wavefunction_i;
+        }
+        density[gid] = total_density;
+    }
+
+    let sum_dens: f32 = density.iter().sum();
+    if sum_dens > 0.0 {
+        for d in density.iter_mut() {
+            *d /= sum_dens;
+        }
+    }
+    density
+}
+
+/// SCF loop.
+pub fn scf_loop(
+    grid: &Vec<[f32; 3]>,
+    centers: &Vec<[f32; 3]>,
+    alphas: &Vec<f32>,
+    external_potential: &dyn Fn(&[[f32; 3]]) -> Vec<f32>,
+    num_electrons: usize,
+    frame_callback: &mut dyn FnMut(&[f32]),
+) -> (Vec<f32>, Option<Vec<f32>>) {
+    let n_basis = centers.len();
+    let n_grid = grid.len();
+    let mut density = vec![0.1_f32; n_grid];
+    let damping_factor = 0.2_f32;
 
     for iteration in 0..MAX_ITERATIONS {
-        // Build Hamiltonian
-        let hamiltonian: ArrayBase<ndarray::OwnedRepr<f64>, Dim<[usize; 2]>> = build_hamiltonian(&grid, &density, &centers, &alphas, &external_potential);
+        log(format!("Iteration {}: Starting SCF loop", iteration));
+        
+        let mut hamiltonian = build_overlap_matrix(grid, centers, alphas);
+        for r in 0..n_basis {
+            hamiltonian[(r, r)] += 1.0;
+        }
 
-        // Convert to DMatrix for diagonalization
-        let h_mat = to_dmatrix(&hamiltonian)?;
-        // (Currently ignoring S in the diagonalization; a full generalized solve would require S^-1 * H)
-
-        // Perform symmetric eigen-decomposition on H
-        let eigen = SymmetricEigen::new(h_mat);
-        let eigenvalues = eigen.eigenvalues;
+        let eigen = hamiltonian.symmetric_eigen();
+        let eigenvalues = eigen.eigenvalues.as_slice().to_vec();
         let eigenvectors = eigen.eigenvectors;
 
-        // Calculate new density from the lowest-energy eigenvector
-        let mut new_density = Array1::<f64>::zeros(grid.len());
-        // Summation of squares of the coefficients in the lowest-energy column
-        // (This is a simplified approach that doesn't integrate basis functions on the grid.)
-        let lowest_column = eigenvectors.column(0);
-        let sum_of_squares: f64 = lowest_column.iter().map(|&c| c.powi(2)).sum();
-        for i in 0..grid.len() {
-            // Using the same contribution at each grid point (placeholder approach)
-            new_density[i] = sum_of_squares;
+        log(format!("Iteration {}: Eigenvalues calculated: {:?}", iteration, eigenvalues));
+
+        let new_density = update_density(grid, &eigenvectors, centers, alphas, num_electrons);
+
+        for i in 0..n_grid {
+            density[i] = damping_factor * new_density[i] + (1.0 - damping_factor) * density[i];
         }
 
-        // Check for convergence
-        let diff = (&new_density - &density).mapv(|x| x.abs()).sum();
-        if diff < TOLERANCE {
-            log(format!("SCF converged in {} iterations", iteration));
-            log(format!("Final eigenvalues: {:?}", eigenvalues));
-            log(format!("Final density: {:?}", new_density));
+        frame_callback(&density);
 
-            {
-                let mut state = SIMULATION_STATE.lock().unwrap();
-                // Store the final density in the simulation state
-                state.density_matrix = vec![new_density.to_vec()];
-                state.status = SimulationStatus::Completed;
-            }
+        let diff_sum: f32 = new_density
+            .iter()
+            .zip(density.iter())
+            .map(|(a, b)| (a - b).abs())
+            .sum();
+        
+        log(format!("Iteration {}: Density difference sum: {}", iteration, diff_sum));
 
-            return Ok(());
+        if diff_sum < TOLERANCE {
+            log(format!("Iteration {}: Convergence achieved", iteration));
+            return (density, Some(eigenvalues));
         }
-
-        density = new_density;
     }
-
-    Err("SCF did not converge within the maximum number of iterations.")
+    log("Maximum iterations reached without convergence".to_string());
+    (density, None)
 }
 
 pub fn run_scf_command(_args: Vec<String>) {
     log("Starting SCF simulation...".to_string());
-    match scf_loop() {
-        Ok(_) => log("SCF simulation completed successfully.".to_string()),
-        Err(e) => log(format!("Error during SCF simulation: {}", e)),
-    }
+    let mut solver = DFTSolver::new();
+    let grid = solver.build_grid(10);
+    let centers = vec![[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]];
+    let alphas = vec![0.5, 0.5, 0.5];
+    let external_potential = |grid: &[[f32; 3]]| -> Vec<f32> {
+        grid.iter().map(|p| p[0] + p[1] + p[2]).collect()
+    };
+    solver.run_scf(&grid, &centers, &alphas, &external_potential, 2);
+    log("SCF simulation finished".to_string());
 }
