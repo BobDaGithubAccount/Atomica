@@ -111,3 +111,5 @@ impl Default for SimulationState {
         }
     }
 }
+
+//TODO: Use these datastructures in the simulation code

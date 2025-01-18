@@ -18,10 +18,11 @@ js-sys = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ndarray = "0.15"
-# Remove: ndarray-linalg = "0.14"
+# Remove: ndarray-linalg = "0.14" NOTE: IT DOESN'T WORK!
 nalgebra = "0.31"
 itertools = "0.10"
 getrandom = { version = "0.2", features = ["js"] }
+marching-cubes = "0.1.2"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
