@@ -1,11 +1,13 @@
 use nalgebra::{DMatrix, Dynamic, MatrixMN, U1};
 use std::f32::consts::E;
 use crate::log;
+use crate::simulation::*;
+use serde::{Serialize, Deserialize};
 
 const TOLERANCE: f32 = 1e-3;
 const MAX_ITERATIONS: usize = 1000;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DFTSolver {
     pub frames: Vec<Vec<f32>>,
     pub final_density: Vec<f32>,
@@ -57,6 +59,7 @@ impl DFTSolver {
         self.final_density = dens;
         self.eigenvalues = evals;
     }
+
 }
 
 /// Build the overlap matrix.
@@ -179,14 +182,46 @@ pub fn scf_loop(
 }
 
 pub fn run_scf_command(_args: Vec<String>) {
+    let mut state: std::sync::MutexGuard<'_, SimulationState> = SIMULATION_STATE.lock().unwrap();
+    state.status = SimulationStatus::Running;
     log("Starting SCF simulation...".to_string());
-    let mut solver = DFTSolver::new();
-    let grid = solver.build_grid(10);
+    let grid: Vec<[f32; 3]> = state.dft_simulator.build_grid(10);
     let centers = vec![[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]];
     let alphas = vec![0.5, 0.5, 0.5];
     let external_potential = |grid: &[[f32; 3]]| -> Vec<f32> {
         grid.iter().map(|p| p[0] + p[1] + p[2]).collect()
     };
-    solver.run_scf(&grid, &centers, &alphas, &external_potential, 2);
+    state.dft_simulator.run_scf(&grid, &centers, &alphas, &external_potential, 2);
     log("SCF simulation finished".to_string());
+    state.status = SimulationStatus::Completed;
 }
+
+// pub fn run_scf_command(_args: Vec<String>) {
+//     let mut state: std::sync::MutexGuard<'_, SimulationState> = SIMULATION_STATE.lock().unwrap();
+//     log("Starting SCF simulation...".to_string());
+
+//     let mut solver = DFTSolver::new();
+//     let grid = solver.build_grid_from_state(&state);
+
+//     let centers: Vec<[f32; 3]> = state
+//         .atomic_coordinates
+//         .iter()
+//         .map(|n| [n.coordinates[0] as f32, n.coordinates[1] as f32, n.coordinates[2] as f32])
+//         .collect();
+
+//     let alphas = vec![0.5; centers.len()];
+//     let external_potential = |grid_points: &[[f32; 3]]| -> Vec<f32> {
+//         grid_points.iter().map(|p| p[0] + p[1] + p[2]).collect()
+//     };
+
+//     solver.run_scf(&grid, &centers, &alphas, &external_potential, 2);
+
+//     let mut density_converted = Vec::new();
+//     for val in solver.final_density.iter() {
+//         density_converted.push(*val as f64);
+//     }
+//     state.density_matrix.clear();
+//     state.density_matrix.push(density_converted);
+
+//     log("SCF simulation finished".to_string());
+// }
