@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 use lazy_static::lazy_static;
 use serde::{Serialize, Deserialize};
+use crate::dft_simulator::DFTSolver;
 
 lazy_static! {
     pub static ref SIMULATION_STATE: Mutex<SimulationState> = Mutex::new(SimulationState::default());
@@ -22,31 +23,22 @@ pub struct Nucleus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulationState {
-    pub total_time: f64,  // Total simulation time in a.u.
-    pub atomic_coordinates: Vec<Nucleus>, // Atomic coordinates with species and atomic number
-    pub grid_spacing: [f64; 3],           // Grid spacing in R^3
-    pub bounds: [[f64; 2]; 3],            // Bounds of the simulation in R^3
-    pub density_matrix: Vec<Vec<f64>>,    // Time-independent density matrix
+    pub total_time: f64,                  // Total simulation time in a.u.
     pub status: SimulationStatus,         // Status of the simulation
+    pub dft_simulator: DFTSolver,         // DFT solver instance
     pub file_context: Option<String>,     // Can be written to as if it were a file (this can be handled separately)
 }
 
 impl SimulationState {
     pub fn new(
         total_time: f64,
-        nucleus_locations: Vec<Nucleus>,
-        grid_spacing: [f64; 3],
-        bounds: [[f64; 2]; 3],
-        density_matrix: Vec<Vec<f64>>,
+        dft_simulator: DFTSolver,
         status: SimulationStatus,
     ) -> Self {
         let state = SimulationState {
             total_time,
-            atomic_coordinates: nucleus_locations,
-            grid_spacing,
-            bounds,
-            density_matrix,
             status,
+            dft_simulator,
             file_context: None,
         };
 
@@ -69,30 +61,11 @@ impl SimulationState {
         Ok(state)
     }
 
-    pub fn validate_coordinates(&self) -> bool {
-        for nucleus in &self.atomic_coordinates {
-            if nucleus.coordinates[0] < self.bounds[0][0]
-                || nucleus.coordinates[0] > self.bounds[0][1]
-                || nucleus.coordinates[1] < self.bounds[1][0]
-                || nucleus.coordinates[1] > self.bounds[1][1]
-                || nucleus.coordinates[2] < self.bounds[2][0]
-                || nucleus.coordinates[2] > self.bounds[2][1]
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
     pub fn print_summary(&self) -> String {
         let summary = format!(
-            "Simulation State:\n  Total Time: {:.3} a.u.\n  Status: {:?}\n  Grid Spacing: ({:.3}, {:.3}, {:.3}) a.u.\n  Bounds: x({:.3}, {:.3}), y({:.3}, {:.3}), z({:.3}, {:.3}) a.u.",
+            "Simulation State:\n  Total Time: {:.3} a.u.\n  Status: {:?}\n",
             self.total_time,
             self.status,
-            self.grid_spacing[0], self.grid_spacing[1], self.grid_spacing[2],
-            self.bounds[0][0], self.bounds[0][1],
-            self.bounds[1][0], self.bounds[1][1],
-            self.bounds[2][0], self.bounds[2][1]
         );
         summary
     }
@@ -102,11 +75,8 @@ impl Default for SimulationState {
     fn default() -> Self {
         SimulationState {
             total_time: 1.0,
-            atomic_coordinates: Vec::new(),
-            grid_spacing: [1.0, 1.0, 1.0],
-            bounds: [[0.0, 10.0], [0.0, 10.0], [0.0, 10.0]],
-            density_matrix: Vec::new(),
-            status: SimulationStatus::Running,
+            status: SimulationStatus::Completed,
+            dft_simulator: DFTSolver::new(),
             file_context: None,
         }
     }

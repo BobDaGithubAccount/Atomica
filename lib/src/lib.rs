@@ -39,7 +39,7 @@ pub fn log(message: String) {
 pub fn register_commands() {
     register_command!("reset_camera", reset_camera_command, "Reset camera to default settings", "reset_camera");
     register_command!("fov", update_camera_fov_command, "Update camera field of view (FOV)", "fov [degrees]");
-    register_command!("run_dft", dft_simulator::run_scf_command, "Run self-consistent field (SCF) simulation of KS-DFT", "run_dft");
+    register_command!("run_dft", dft_simulator::run_scf_command, "Run self-consistent field (SCF) simulation of KS-DFT", "run_dft [grid_size]"); //TODO extend options
     commands::init();
 }
 
@@ -49,7 +49,7 @@ fn reset_camera_command(args: Vec<String>) {
         return;
     }
     log(format!("Resetting camera to default settings"));
-    if let Some(mut camera) = renderer::CAMERA_INSTANCE.lock().unwrap().as_mut() {
+    if let Some(camera) = renderer::CAMERA_INSTANCE.lock().unwrap().as_mut() {
         let default_position = vec3(0.0, 2.0, 4.0);
         let default_target = vec3(0.0, 0.0, 0.0);
         let default_up = vec3(0.0, 1.0, 0.0);
@@ -80,7 +80,7 @@ fn update_camera_fov_command(args: Vec<String>) {
 
     match args[0].parse::<f32>() {
         Ok(fov_degrees) if fov_degrees > 0.0 && fov_degrees < 180.0 => {
-            if let Some(mut camera) = renderer::CAMERA_INSTANCE.lock().unwrap().as_mut() {
+            if let Some(camera) = renderer::CAMERA_INSTANCE.lock().unwrap().as_mut() {
                 let current_viewport = camera.viewport().clone();
                 let current_position = *camera.position();
                 let current_target = *camera.target();

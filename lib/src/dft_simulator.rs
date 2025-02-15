@@ -1,13 +1,17 @@
-use nalgebra::{DMatrix, Dynamic, MatrixMN, U1};
-use std::f32::consts::E;
 use crate::log;
+use nalgebra::DMatrix;
+use serde::{Deserialize, Serialize};
+use std::f32::consts::E;
 
 const TOLERANCE: f32 = 1e-3;
 const MAX_ITERATIONS: usize = 1000;
 
-#[derive(Debug)]
+// Exchange–correlation constant for the electron gas (LDA, exchange only).
+const EXCHANGE_CORRELATION_CONSTANT: f32 = -0.738558766;
+
+/// A simple DFT solver that stores the final electron density and eigenvalues.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DFTSolver {
-    pub frames: Vec<Vec<f32>>,
     pub final_density: Vec<f32>,
     pub eigenvalues: Option<Vec<f32>>,
 }
@@ -15,20 +19,21 @@ pub struct DFTSolver {
 impl DFTSolver {
     pub fn new() -> Self {
         DFTSolver {
-            frames: Vec::new(),
             final_density: Vec::new(),
             eigenvalues: None,
         }
     }
 
+    /// Build a uniform 3D grid spanning [-10, 10] in each direction.
+    /// (This mirrors the Python grid generation using np.linspace.)
     pub fn build_grid(&self, points_per_axis: usize) -> Vec<[f32; 3]> {
-        let mut grid = Vec::new();
+        let mut grid = Vec::with_capacity(points_per_axis * points_per_axis * points_per_axis);
         for x in 0..points_per_axis {
+            let xf = -10.0 + 20.0 * (x as f32 / (points_per_axis as f32 - 1.0));
             for y in 0..points_per_axis {
+                let yf = -10.0 + 20.0 * (y as f32 / (points_per_axis as f32 - 1.0));
                 for z in 0..points_per_axis {
-                    let xf = -10.0 + 20.0 * (x as f32 / (points_per_axis - 1) as f32);
-                    let yf = -10.0 + 20.0 * (y as f32 / (points_per_axis - 1) as f32);
-                    let zf = -10.0 + 20.0 * (z as f32 / (points_per_axis - 1) as f32);
+                    let zf = -10.0 + 20.0 * (z as f32 / (points_per_axis as f32 - 1.0));
                     grid.push([xf, yf, zf]);
                 }
             }
@@ -36,31 +41,33 @@ impl DFTSolver {
         grid
     }
 
+    /// Run the self-consistent field (SCF) simulation.
+    /// This function calls the SCF loop and stores the final electron density and eigenvalues.
     pub fn run_scf(
         &mut self,
-        grid: &Vec<[f32; 3]>,
-        centers: &Vec<[f32; 3]>,
-        alphas: &Vec<f32>,
-        external_potential: &dyn Fn(&[[f32; 3]]) -> Vec<f32>,
+        grid: &[[f32; 3]],
+        centers: &[[f32; 3]],
+        alphas: &[f32],
         num_electrons: usize,
     ) {
-        let (dens, evals) = scf_loop(
-            grid,
-            centers,
-            alphas,
-            external_potential,
-            num_electrons,
-            &mut |d| {
-                self.frames.push(d.to_vec());
-            },
-        );
-        self.final_density = dens;
-        self.eigenvalues = evals;
+        let (density, eigenvalues) = scf_loop(grid, centers, alphas, num_electrons);
+        self.final_density = density;
+        self.eigenvalues = eigenvalues;
     }
 }
 
-/// Build the overlap matrix.
-fn build_overlap_matrix(grid: &Vec<[f32; 3]>, centers: &Vec<[f32; 3]>, alphas: &Vec<f32>) -> DMatrix<f32> {
+/// Build the overlap matrix from Gaussian basis functions.
+/// For centers \( c_i \) and \( c_j \) with widths \( \alpha_i \) and \( \alpha_j \),
+/// we compute the matrix element as:
+///
+///     S(i,j) = Σₖ exp(-α_i‖rₖ-c_i‖²) exp(-α_j‖rₖ-c_j‖²)
+///
+/// This corresponds directly to your OpenCL kernel.
+fn build_overlap_matrix(
+    grid: &[[f32; 3]],
+    centers: &[[f32; 3]],
+    alphas: &[f32],
+) -> DMatrix<f32> {
     let n_basis = centers.len();
     let n_grid = grid.len();
     let mut result = DMatrix::<f32>::zeros(n_basis, n_basis);
@@ -69,11 +76,13 @@ fn build_overlap_matrix(grid: &Vec<[f32; 3]>, centers: &Vec<[f32; 3]>, alphas: &
         for j in 0..n_basis {
             let mut s = 0.0_f32;
             for k in 0..n_grid {
+                // Gaussian centered at center i.
                 let dx_i = grid[k][0] - centers[i][0];
                 let dy_i = grid[k][1] - centers[i][1];
                 let dz_i = grid[k][2] - centers[i][2];
                 let g_i = (-alphas[i] * (dx_i * dx_i + dy_i * dy_i + dz_i * dz_i)).exp();
 
+                // Gaussian centered at center j.
                 let dx_j = grid[k][0] - centers[j][0];
                 let dy_j = grid[k][1] - centers[j][1];
                 let dz_j = grid[k][2] - centers[j][2];
@@ -87,106 +96,245 @@ fn build_overlap_matrix(grid: &Vec<[f32; 3]>, centers: &Vec<[f32; 3]>, alphas: &
     result
 }
 
-/// Update electron density.
+/// Build a complete Hamiltonian that includes kinetic energy, nuclear Coulomb attraction,
+/// and a local exchange–correlation potential (LDA).
+///
+/// For a pair of basis functions \( \phi_i(r) = \exp(-\alpha_i|r-c_i|^2) \) and
+/// \( \phi_j(r) = \exp(-\alpha_j|r-c_j|^2) \) the matrix element is computed as:
+///
+/// \(\displaystyle H_{ij} = \int d^3r \Bigl[ -\tfrac{1}{2}\phi_i(r)\nabla^2\phi_j(r)
+///   + \phi_i(r)\,V_{\rm tot}(r)\,\phi_j(r)\Bigr]\),
+///
+/// where the total potential is
+///
+/// \(\displaystyle V_{\rm tot}(r) = V_{\rm nuc}(r) + V_{\rm xc}(r)\).
+///
+/// - The kinetic term uses the analytic Laplacian for a Gaussian:
+///   \(\displaystyle \nabla^2\phi_j(r) = [4\alpha_j^2|r-c_j|^2 - 6\alpha_j]\phi_j(r)\).
+/// - The nuclear potential is given by:
+///   \(\displaystyle V_{\rm nuc}(r) = \sum_a \Bigl(-\frac{Z_a}{|r-R_a|}\Bigr)\).
+/// - The exchange–correlation potential uses:
+///   \(\displaystyle V_{\rm xc}(r) = \text{EXCHANGE_CORRELATION_CONSTANT}\times\rho(r)^{1/3}\).
+fn build_full_hamiltonian(
+    grid: &[[f32; 3]],
+    centers: &[[f32; 3]],       // basis function centers
+    alphas: &[f32],             // Gaussian exponents for each basis function
+    atomic_centers: &[[f32; 3]],  // positions of nuclei
+    atomic_charges: &[f32],       // nuclear charges (Z) for each atom
+    density: &[f32],            // electron density on each grid point
+    ) -> DMatrix<f32> {
+    let n_basis = centers.len();
+    let n_grid = grid.len();
+    
+    let volume = grid.len() as f32;
+    let dV = volume / n_grid as f32; // integration weight per grid point
+    log::info!("Volume: {}, dV: {}", volume, dV);
+    
+    // Small epsilon to avoid singularities in the Coulomb potential.
+    let epsilon = 1e-6_f32;
+
+    let mut hamiltonian = DMatrix::<f32>::zeros(n_basis, n_basis);
+
+    // Loop over each pair of basis functions.
+    for i in 0..n_basis {
+        for j in 0..n_basis {
+            let mut hij = 0.0_f32;
+
+            // Integrate over grid points.
+            for (k, point) in grid.iter().enumerate() {
+                // Evaluate basis function i
+                let dx_i = point[0] - centers[i][0];
+                let dy_i = point[1] - centers[i][1];
+                let dz_i = point[2] - centers[i][2];
+                let r2_i = dx_i * dx_i + dy_i * dy_i + dz_i * dz_i;
+                let phi_i = (-alphas[i] * r2_i).exp();
+
+                // Evaluate basis function j
+                let dx_j = point[0] - centers[j][0];
+                let dy_j = point[1] - centers[j][1];
+                let dz_j = point[2] - centers[j][2];
+                let r2_j = dx_j * dx_j + dy_j * dy_j + dz_j * dz_j;
+                let phi_j = (-alphas[j] * r2_j).exp();
+
+                // Analytic Laplacian of a Gaussian:
+                let laplacian_phi_j = (4.0 * alphas[j] * alphas[j] * r2_j - 6.0 * alphas[j]) * phi_j;
+
+                // Kinetic energy term
+                let kinetic = -0.5 * phi_i * laplacian_phi_j;
+
+                // Nuclear Coulomb potential
+                let mut V_nuc = 0.0_f32;
+                for (a, atom_center) in atomic_centers.iter().enumerate() {
+                    let dx_a = point[0] - atom_center[0];
+                    let dy_a = point[1] - atom_center[1];
+                    let dz_a = point[2] - atom_center[2];
+                    let r_a = (dx_a * dx_a + dy_a * dy_a + dz_a * dz_a)
+                        .sqrt()
+                        .max(epsilon);
+                    V_nuc += -atomic_charges[a] / r_a;
+                }
+
+                // Exchange–correlation potential:
+                // V_xc(r) = EXCHANGE_CORRELATION_CONSTANT * ρ(r)^(1/3)
+                // This constant is for an ideal electron gas. Non LDA approaches are more accurate but more complex.
+                let density_val = density[k].max(1e-12);
+                let V_xc = EXCHANGE_CORRELATION_CONSTANT * density_val.powf(1.0 / 3.0);
+
+                let V_total = V_nuc + V_xc;
+
+                // Potential energy term
+                let potential = phi_i * V_total * phi_j;
+
+                // Sum contributions with the integration weight (scale for volume element).
+                hij += (kinetic + potential) * dV;
+            }
+            hamiltonian[(i, j)] = hij;
+        }
+    }
+
+    hamiltonian
+}
+
+/// Update the electron density on the grid from the occupied eigenfunctions.
 fn update_density(
-    grid: &Vec<[f32; 3]>,
-    eigenvectors: &DMatrix<f32>,
-    centers: &Vec<[f32; 3]>,
-    alphas: &Vec<f32>,
+    grid: &[[f32; 3]],
+    eigenvectors: &DMatrix<f32>, // Expected shape: (n_basis, n_occ)
+    centers: &[[f32; 3]],
+    alphas: &[f32],
     num_electrons: usize,
 ) -> Vec<f32> {
     let n_basis = centers.len();
     let n_grid = grid.len();
+    let n_occ = num_electrons.min(eigenvectors.ncols());
     let mut density = vec![0.0_f32; n_grid];
 
     for (gid, point) in grid.iter().enumerate() {
-        let mut total_density = 0.0_f32;
-        let n_occ = num_electrons.min(eigenvectors.ncols());
+        let mut total = 0.0;
         for i in 0..n_occ {
-            let mut wavefunction_i = 0.0_f32;
+            let mut psi = 0.0_f32;
             for j in 0..n_basis {
                 let dx = point[0] - centers[j][0];
                 let dy = point[1] - centers[j][1];
                 let dz = point[2] - centers[j][2];
                 let g = (-alphas[j] * (dx * dx + dy * dy + dz * dz)).exp();
-                wavefunction_i += eigenvectors[(j, i)] * g;
+                psi += eigenvectors[(j, i)] * g;
             }
-            total_density += wavefunction_i * wavefunction_i;
+            total += psi * psi;
         }
-        density[gid] = total_density;
+        density[gid] = total;
     }
 
-    let sum_dens: f32 = density.iter().sum();
-    if sum_dens > 0.0 {
-        for d in density.iter_mut() {
-            *d /= sum_dens;
+    // Normalise the density so that the sum equals the number of electrons.
+    let sum: f32 = density.iter().sum();
+    if sum > 0.0 {
+        for d in &mut density {
+            *d /= sum;
         }
     }
     density
 }
 
-/// SCF loop.
-pub fn scf_loop(
-    grid: &Vec<[f32; 3]>,
-    centers: &Vec<[f32; 3]>,
-    alphas: &Vec<f32>,
-    external_potential: &dyn Fn(&[[f32; 3]]) -> Vec<f32>,
+/// The self-consistent field (SCF) loop.
+/// 1. Build the Hamiltonian,
+/// 2. Diagonalize it,
+/// 3. Update the electron density using the occupied eigenfunctions,
+/// 4. Apply damping, and
+/// 5. Check for convergence.
+fn scf_loop(
+    grid: &[[f32; 3]],
+    centers: &[[f32; 3]],
+    alphas: &[f32],
     num_electrons: usize,
-    frame_callback: &mut dyn FnMut(&[f32]),
 ) -> (Vec<f32>, Option<Vec<f32>>) {
-    let n_basis = centers.len();
     let n_grid = grid.len();
+    let n_basis = centers.len();
+    // Initial guess for the density.
     let mut density = vec![0.1_f32; n_grid];
     let damping_factor = 0.2_f32;
+    let mut eigenvalues_result = None;
 
-    for iteration in 0..MAX_ITERATIONS {
-        log(format!("Iteration {}: Starting SCF loop", iteration));
-        
-        let mut hamiltonian = build_overlap_matrix(grid, centers, alphas);
-        for r in 0..n_basis {
-            hamiltonian[(r, r)] += 1.0;
-        }
+    //TODO make this configurable
+    let atomic_centers: Vec<[f32; 3]> = vec![[0.0, 0.0, 0.0]];
+    let atomic_charges: Vec<f32> = vec![1.0];
 
+    for iter in 0..MAX_ITERATIONS {
+        log(format!("Iteration {}...", iter + 1));
+
+        // Build the full Hamiltonian.
+        let hamiltonian = build_full_hamiltonian(
+            grid,
+            centers,
+            alphas,
+            &atomic_centers,
+            &atomic_charges,
+            &density,
+        );
+
+        // Diagonalize the Hamiltonian (symmetric eigen–problem).
         let eigen = hamiltonian.symmetric_eigen();
-        let eigenvalues = eigen.eigenvalues.as_slice().to_vec();
+        let eigenvalues = eigen.eigenvalues.clone();
         let eigenvectors = eigen.eigenvectors;
+        log(format!(
+            "Eigenvalues (first {}): {:?}",
+            num_electrons,
+            &eigenvalues.as_slice()[0..num_electrons.min(eigenvalues.len())]
+        ));
 
-        log(format!("Iteration {}: Eigenvalues calculated: {:?}", iteration, eigenvalues));
-
+        // Update the electron density from the occupied states.
         let new_density = update_density(grid, &eigenvectors, centers, alphas, num_electrons);
 
-        for i in 0..n_grid {
-            density[i] = damping_factor * new_density[i] + (1.0 - damping_factor) * density[i];
+        // Apply damping.
+        for k in 0..n_grid {
+            density[k] = damping_factor * new_density[k] + (1.0 - damping_factor) * density[k];
         }
 
-        frame_callback(&density);
-
-        let diff_sum: f32 = new_density
+        // Check convergence.
+        let diff: f32 = new_density
             .iter()
             .zip(density.iter())
             .map(|(a, b)| (a - b).abs())
             .sum();
-        
-        log(format!("Iteration {}: Density difference sum: {}", iteration, diff_sum));
-
-        if diff_sum < TOLERANCE {
-            log(format!("Iteration {}: Convergence achieved", iteration));
-            return (density, Some(eigenvalues));
+        if diff < TOLERANCE {
+            log(format!("Converged in {} iterations.", iter + 1));
+            eigenvalues_result = Some(eigenvalues.as_slice().to_vec());
+            return (density, eigenvalues_result);
         }
     }
-    log("Maximum iterations reached without convergence".to_string());
+    println!("SCF did not converge.");
     (density, None)
 }
 
-pub fn run_scf_command(_args: Vec<String>) {
+pub fn run_scf_command(args: Vec<String>) {
+
+    if(args.len() != 1) {
+        log("Invalid number of arguments for run_scf_command".to_string());
+        return;
+    }
+
+    let points_per_axis = args[0].parse::<usize>().unwrap();
+
     log("Starting SCF simulation...".to_string());
+
     let mut solver = DFTSolver::new();
-    let grid = solver.build_grid(10);
-    let centers = vec![[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]];
-    let alphas = vec![0.5, 0.5, 0.5];
-    let external_potential = |grid: &[[f32; 3]]| -> Vec<f32> {
-        grid.iter().map(|p| p[0] + p[1] + p[2]).collect()
-    };
-    solver.run_scf(&grid, &centers, &alphas, &external_potential, 2);
-    log("SCF simulation finished".to_string());
+
+    let grid = solver.build_grid(points_per_axis);
+    log(format!("Grid size: {}", grid.len()));
+
+    // Single Gaussian basis function centered at the origin.
+    let centers: Vec<[f32; 3]> = vec![[0.0, 0.0, 0.0]];
+    let alphas: Vec<f32> = vec![1.0];
+
+    let num_electrons = 1;
+
+    log("Running SCF simulation...".to_string());
+    solver.run_scf(&grid, &centers, &alphas, num_electrons);
+
+    log("Final electron density:".to_string());
+    let final_density_string = solver
+        .final_density
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>()
+        .join(", ");
+    log(final_density_string);
 }
