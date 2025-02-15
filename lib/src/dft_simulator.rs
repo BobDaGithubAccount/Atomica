@@ -2,6 +2,7 @@ use crate::log;
 use nalgebra::DMatrix;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::E;
+use crate::simulation::*;
 
 const TOLERANCE: f32 = 1e-3;
 const MAX_ITERATIONS: usize = 1000;
@@ -9,7 +10,6 @@ const MAX_ITERATIONS: usize = 1000;
 // Exchange–correlation constant for the electron gas (LDA, exchange only).
 const EXCHANGE_CORRELATION_CONSTANT: f32 = -0.738558766;
 
-/// A simple DFT solver that stores the final electron density and eigenvalues.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DFTSolver {
     pub final_density: Vec<f32>,
@@ -24,8 +24,6 @@ impl DFTSolver {
         }
     }
 
-    /// Build a uniform 3D grid spanning [-10, 10] in each direction.
-    /// (This mirrors the Python grid generation using np.linspace.)
     pub fn build_grid(&self, points_per_axis: usize) -> Vec<[f32; 3]> {
         let mut grid = Vec::with_capacity(points_per_axis * points_per_axis * points_per_axis);
         for x in 0..points_per_axis {
@@ -56,13 +54,7 @@ impl DFTSolver {
     }
 }
 
-/// Build the overlap matrix from Gaussian basis functions.
-/// For centers \( c_i \) and \( c_j \) with widths \( \alpha_i \) and \( \alpha_j \),
-/// we compute the matrix element as:
-///
-///     S(i,j) = Σₖ exp(-α_i‖rₖ-c_i‖²) exp(-α_j‖rₖ-c_j‖²)
-///
-/// This corresponds directly to your OpenCL kernel.
+//TODO: integrate into simulation
 fn build_overlap_matrix(
     grid: &[[f32; 3]],
     centers: &[[f32; 3]],
@@ -96,25 +88,6 @@ fn build_overlap_matrix(
     result
 }
 
-/// Build a complete Hamiltonian that includes kinetic energy, nuclear Coulomb attraction,
-/// and a local exchange–correlation potential (LDA).
-///
-/// For a pair of basis functions \( \phi_i(r) = \exp(-\alpha_i|r-c_i|^2) \) and
-/// \( \phi_j(r) = \exp(-\alpha_j|r-c_j|^2) \) the matrix element is computed as:
-///
-/// \(\displaystyle H_{ij} = \int d^3r \Bigl[ -\tfrac{1}{2}\phi_i(r)\nabla^2\phi_j(r)
-///   + \phi_i(r)\,V_{\rm tot}(r)\,\phi_j(r)\Bigr]\),
-///
-/// where the total potential is
-///
-/// \(\displaystyle V_{\rm tot}(r) = V_{\rm nuc}(r) + V_{\rm xc}(r)\).
-///
-/// - The kinetic term uses the analytic Laplacian for a Gaussian:
-///   \(\displaystyle \nabla^2\phi_j(r) = [4\alpha_j^2|r-c_j|^2 - 6\alpha_j]\phi_j(r)\).
-/// - The nuclear potential is given by:
-///   \(\displaystyle V_{\rm nuc}(r) = \sum_a \Bigl(-\frac{Z_a}{|r-R_a|}\Bigr)\).
-/// - The exchange–correlation potential uses:
-///   \(\displaystyle V_{\rm xc}(r) = \text{EXCHANGE_CORRELATION_CONSTANT}\times\rho(r)^{1/3}\).
 fn build_full_hamiltonian(
     grid: &[[f32; 3]],
     centers: &[[f32; 3]],       // basis function centers
@@ -337,4 +310,6 @@ pub fn run_scf_command(args: Vec<String>) {
         .collect::<Vec<String>>()
         .join(", ");
     log(final_density_string);
+
+    SIMULATION_STATE.lock().unwrap().dft_simulator = solver;
 }

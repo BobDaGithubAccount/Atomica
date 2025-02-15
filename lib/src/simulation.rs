@@ -23,7 +23,7 @@ pub struct Nucleus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulationState {
-    pub total_time: f64,                  // Total simulation time in a.u.
+    pub total_time: f64,                  // Total simulation time in a.u. (irrelevant for now)
     pub status: SimulationStatus,         // Status of the simulation
     pub dft_simulator: DFTSolver,         // DFT solver instance
     pub file_context: Option<String>,     // Can be written to as if it were a file (this can be handled separately)
