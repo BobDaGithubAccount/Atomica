@@ -1,9 +1,9 @@
 use crate::log;
 use std::sync::Mutex;
+use std::panic;
 use lazy_static::lazy_static;
 use three_d::{renderer::*, FrameInputGenerator, SurfaceSettings, WindowedContext};
 use log::info;
-use web_sys::console::info;
 use crate::simulation::*;
 
 lazy_static! {
@@ -68,10 +68,8 @@ pub fn main() {
                 window.request_redraw();
             }
             winit::event::Event::RedrawRequested(_) => {
-                // Generate the mesh once per frame.
                 let cpu_mesh = generate_mesh_from_density();
 
-                // Update the cached mesh.
                 {
                     let mut cached = CASHED_CPU_MESH.try_lock().unwrap();
                     cached.clone_from(&cpu_mesh);
@@ -124,8 +122,9 @@ pub fn main() {
 }
 
 use marching_cubes::marching::{GridCell, MarchingCubes, Triangle};
-use marching_cubes::container::{Vec3, vector3};
+use marching_cubes::container::vector3;
 
+//isolevel degeneracy changes
 pub fn generate_mesh_from_density() -> CpuMesh {
     if let Ok(state) = SIMULATION_STATE.try_lock() {
         if state.dft_simulator.final_density.is_empty() {
@@ -138,12 +137,11 @@ pub fn generate_mesh_from_density() -> CpuMesh {
             return CASHED_CPU_MESH.lock().unwrap().clone();
         }
 
-        // Determine grid dimensions from the number of density points.
         let grid_size = (state.dft_simulator.final_density.len() as f64)
             .powf(1.0 / 3.0)
             .round() as usize;
 
-        // Compute the isolevel (here left as mean + 2*std_dev for later tweaking).
+        // Compute the isolevel as mean + 2 * standard deviation. (95% confidence interval, standard practice)
         let mean = state.dft_simulator.final_density.iter().sum::<f32>()
             / state.dft_simulator.final_density.len() as f32;
         let std_dev = (state.dft_simulator.final_density.iter()
@@ -166,11 +164,9 @@ pub fn generate_mesh_from_density() -> CpuMesh {
             grid_size
         );
 
-        // Iterate over each cube in the grid.
         for x in 0..(grid_size - 1) {
             for y in 0..(grid_size - 1) {
                 for z in 0..(grid_size - 1) {
-                    // Our index function matches the order in which build_grid() pushes points:
                     let index = |xi, yi, zi| zi + grid_size * (yi + grid_size * xi);
 
                     let cube = GridCell {
@@ -196,25 +192,36 @@ pub fn generate_mesh_from_density() -> CpuMesh {
                         ],
                     };
 
-                    // Compute the cube index by checking each vertex against the isolevel.
-                    // (This is the standard step in marching cubes to determine if a cell is intersected.)
                     let mut cube_index = 0;
                     for (i, &v) in cube.value.iter().enumerate() {
                         if v < isolevel {
                             cube_index |= 1 << i;
                         }
                     }
-                    // If all vertices are on one side (cube index 0 or 255), skip processing.
                     if cube_index == 0 || cube_index == 255 {
                         continue;
                     }
 
-                    // Create a fresh triangles vector for this cell.
-                    let mut triangles: Vec<Triangle> = Vec::new();
-                    let marching_cubes = MarchingCubes::new(isolevel, cube);
-                    let num_triangles = marching_cubes.polygonise(&mut triangles);
-                    info!("Number of triangles: {}", num_triangles);
+                    // Instead of pre-checking edge differences, simply attempt to polygonise
+                    // and catch any panic that might occur (e.g., from an invalid edge interpolation).
+                    // (easiest way to deal with degenerate cases)
+                    let polygonisation_result = panic::catch_unwind(|| {
+                        let mut triangles: Vec<Triangle> = Vec::new();
+                        let marching_cubes = MarchingCubes::new(isolevel, cube);
+                        let num_triangles = marching_cubes.polygonise(&mut triangles);
+                        (num_triangles, triangles)
+                    });
 
+                    // If polygonisation panicked, skip this cell.
+                    let (num_triangles, triangles) = match polygonisation_result {
+                        Ok(result) => result,
+                        Err(_) => {
+                            info!("Skipping degenerate cell at ({}, {}, {})", x, y, z);
+                            continue;
+                        }
+                    };
+
+                    info!("Number of triangles: {}", num_triangles);
                     for t in &triangles[..num_triangles as usize] {
                         let start_index = vertices.len() as u32;
                         vertices.extend_from_slice(&[
@@ -234,7 +241,7 @@ pub fn generate_mesh_from_density() -> CpuMesh {
         
         info!("Vertices length: {}, Indices length: {}", vertices.len(), indices.len());
 
-        // Convert to the three_d positions type.
+        // Convert vertices to the mesh's positions type.
         let vertex_vectors: Vec<Vector3<f32>> = vertices
             .into_iter()
             .map(|v| Vector3::new(v[0], v[1], v[2]))

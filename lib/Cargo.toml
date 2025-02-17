@@ -26,3 +26,9 @@ marching-cubes = "0.1.2"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[profile.dev]
+panic = "unwind"
+
+[profile.release]
+panic = "unwind"

@@ -1,7 +1,6 @@
 use crate::log;
 use nalgebra::DMatrix;
 use serde::{Deserialize, Serialize};
-use std::f32::consts::E;
 use crate::simulation::*;
 
 const TOLERANCE: f32 = 1e-3;
@@ -100,8 +99,8 @@ fn build_full_hamiltonian(
     let n_grid = grid.len();
     
     let volume = grid.len() as f32;
-    let dV = volume / n_grid as f32; // integration weight per grid point
-    log::info!("Volume: {}, dV: {}", volume, dV);
+    let d_v = volume / n_grid as f32; // integration weight per grid point
+    log::info!("Volume: {}, dV: {}", volume, d_v);
     
     // Small epsilon to avoid singularities in the Coulomb potential.
     let epsilon = 1e-6_f32;
@@ -136,7 +135,7 @@ fn build_full_hamiltonian(
                 let kinetic = -0.5 * phi_i * laplacian_phi_j;
 
                 // Nuclear Coulomb potential
-                let mut V_nuc = 0.0_f32;
+                let mut v_nuc = 0.0_f32;
                 for (a, atom_center) in atomic_centers.iter().enumerate() {
                     let dx_a = point[0] - atom_center[0];
                     let dy_a = point[1] - atom_center[1];
@@ -144,22 +143,22 @@ fn build_full_hamiltonian(
                     let r_a = (dx_a * dx_a + dy_a * dy_a + dz_a * dz_a)
                         .sqrt()
                         .max(epsilon);
-                    V_nuc += -atomic_charges[a] / r_a;
+                    v_nuc += -atomic_charges[a] / r_a;
                 }
 
                 // Exchange–correlation potential:
                 // V_xc(r) = EXCHANGE_CORRELATION_CONSTANT * ρ(r)^(1/3)
                 // This constant is for an ideal electron gas. Non LDA approaches are more accurate but more complex.
                 let density_val = density[k].max(1e-12);
-                let V_xc = EXCHANGE_CORRELATION_CONSTANT * density_val.powf(1.0 / 3.0);
+                let v_xc = EXCHANGE_CORRELATION_CONSTANT * density_val.powf(1.0 / 3.0);
 
-                let V_total = V_nuc + V_xc;
+                let v_total = v_nuc + v_xc;
 
                 // Potential energy term
-                let potential = phi_i * V_total * phi_j;
+                let potential = phi_i * v_total * phi_j;
 
                 // Sum contributions with the integration weight (scale for volume element).
-                hij += (kinetic + potential) * dV;
+                hij += (kinetic + potential) * d_v;
             }
             hamiltonian[(i, j)] = hij;
         }
@@ -279,7 +278,7 @@ fn scf_loop(
 
 pub fn run_scf_command(args: Vec<String>) {
 
-    if(args.len() != 1) {
+    if args.len() != 1 {
         log("Invalid number of arguments for run_scf_command".to_string());
         return;
     }
