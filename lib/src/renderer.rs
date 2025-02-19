@@ -68,22 +68,25 @@ pub fn main() {
                 window.request_redraw();
             }
             winit::event::Event::RedrawRequested(_) => {
-                let cpu_mesh = generate_mesh_from_density();
-
                 {
-                    let mut cached = CASHED_CPU_MESH.try_lock().unwrap();
-                    cached.clone_from(&cpu_mesh);
+                    let mut frame_count = FRAME_COUNTER.lock().unwrap();
+                    *frame_count += 1;
+                    if *frame_count % 60 == 0 {
+                        let cpu_mesh = generate_mesh_from_density();
+                        info!("Generated mesh!");
+                        let mut cached = CASHED_CPU_MESH.try_lock().unwrap();
+                        cached.clone_from(&cpu_mesh);
+                    }
                 }
 
-                // Create the model from the generated mesh.
                 let mesh_model: Gm<Mesh, ColorMaterial> = Gm::new(
-                    Mesh::new(&context, &cpu_mesh),
+                    Mesh::new(&context, &CASHED_CPU_MESH.lock().unwrap()),
                     ColorMaterial {
                         color: Srgba::GREEN,
                         ..Default::default()
                     },
                 );
-
+                
                 let mut frame_input: three_d::FrameInput = frame_input_generator.generate(&context);
 
                 if let Some(camera) = CAMERA_INSTANCE.lock().unwrap().as_mut() {
@@ -140,7 +143,7 @@ fn generate_mesh_from_density() -> CpuMesh {
         let mut vertices = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
     
-        // Linear interpolation along an edge.
+        // Linear interpolation along an edge. (might want to improve this)
         fn vertex_interp(p1: Vec3, p2: Vec3, valp1: f32, valp2: f32, iso_value: f32) -> Vec3 {
             if (iso_value - valp1).abs() < 0.00001 {
                 return p1;

@@ -298,17 +298,9 @@ pub fn run_scf_command(args: Vec<String>) {
 
     let num_electrons = 1;
 
-    log("Running SCF simulation...".to_string());
+    log("Running SCF loop...".to_string());
     solver.run_scf(&grid, &centers, &alphas, num_electrons);
 
-    log("Final electron density:".to_string());
-    let final_density_string = solver
-        .final_density
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<String>>()
-        .join(", ");
-    log(final_density_string);
-
+    log("Solution found!".to_string());
     SIMULATION_STATE.lock().unwrap().dft_simulator = solver;
 }
