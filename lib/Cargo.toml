@@ -3,6 +3,8 @@ name = "atomica_lib"
 version = "0.1.0"
 edition = "2021"
 repository="https://github.com/BobDaGithubAccount/Atomica"
+license-file = "UNLICENSE"
+description = "Atomica rust internals"
 
 [dependencies]
 wasm-bindgen = "0.2"
@@ -26,9 +28,3 @@ marching-cubes = "0.1.2"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
-
-[profile.dev]
-panic = "unwind"
-
-[profile.release]
-panic = "unwind"
