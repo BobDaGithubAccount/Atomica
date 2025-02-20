@@ -1,5 +1,7 @@
 #OPTIMAL GIT LOG COMMAND: git log --reflog --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%ad>%Creset %an' --date=short > log.log
 
+misc/target
+misc/Cargo.lock
 rustplayground/
 notes.txt
 marching-cubes-main/

@@ -289,7 +289,7 @@ fn generate_mesh_from_density() -> CpuMesh {
             ..Default::default()
         };
         println!("Mesh vertex count: {}", mesh.vertex_count());
-    
+
         return mesh;
     }
     else {
