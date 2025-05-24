@@ -82,4 +82,4 @@ impl Default for SimulationState {
     }
 }
 
-//TODO: Use these datastructures in the simulation code
+//TODO: Use these datastructures in the simulation code (better)

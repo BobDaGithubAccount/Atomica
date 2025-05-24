@@ -54,7 +54,6 @@ impl DFTSolver {
     }
 }
 
-//TODO: integrate into simulation
 fn build_overlap_matrix(
     grid: &[[f32; 3]],
     centers: &[[f32; 3]],
@@ -143,7 +142,7 @@ fn compute_hartree_potential_fft(
         }
     }
 
-    // 3) Solve in k‐space: V(k) = (4π / |k|²) ρ(k), with k = 2π·m/L
+    // 3) Solve in k‐space: V(k) = (4π / |k|²) ρ(k), with k = 2π·m/L (thanks copilot for the unicode :D)
     for i in 0..n {
         let ki = if i <= n/2 { i as f32 } else { (i as f32) - (n as f32) };
         let kx = 2.0 * std::f32::consts::PI * ki / l;
