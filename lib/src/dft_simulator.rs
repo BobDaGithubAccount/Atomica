@@ -245,6 +245,8 @@ fn build_full_hamiltonian(
     // FFT-based Hartree potential remains unchanged.
     let v_hartree = compute_hartree_potential_fft(density, points_per_axis);
 
+    log(format!("Building full Hamiltonian on {}³ grid with {} basis functions given hartree result", points_per_axis, n_basis));
+
     let mut hamiltonian = DMatrix::<f32>::zeros(n_basis, n_basis);
     let epsilon = 1e-6_f32;
 
@@ -352,8 +354,8 @@ fn scf_loop(
     centers: &[[f32; 3]],
     alphas: &[f32],
     num_electrons: usize,
-    atomic_centers: &[[f32; 3]],      // moved in as parameters
-    atomic_charges: &[f32],           // moved in as parameters
+    atomic_centers: &[[f32; 3]],
+    atomic_charges: &[f32],
 ) -> (Vec<f32>, Option<Vec<f32>>) {
     let n_grid = grid.len();
     // let n_basis = centers.len();
@@ -443,23 +445,25 @@ pub fn run_scf_command(args: Vec<String>) {
         return;
     }
 
-    let points_per_axis = args[0].parse::<usize>().unwrap();
+    let config_key = &args[0];
+    let configs = SIMULATION_CONFIGS.lock().unwrap();
 
-    log("Starting SCF simulation...".to_string());
+    let config = match configs.get(config_key) {
+        Some(cfg) => cfg.clone(),
+        None => {
+            log(format!(
+                "Invalid configuration key '{}'. Available configurations are: {}",
+                config_key,
+                configs.keys().cloned().collect::<Vec<_>>().join(", ")
+            ));
+            return;
+        }
+    };
+
+    log(format!("Starting SCF simulation with config '{}'", config_key));
 
     let mut solver = DFTSolver::new();
-
-    let grid = solver.build_grid(points_per_axis);
-    log(format!("Grid size: {}", grid.len()));
-
-    // Single Gaussian basis function centered at the origin.
-    let centers: Vec<[f32; 3]> = vec![[0.0, 0.0, 0.0]];
-    let alphas: Vec<f32> = vec![1.0];
-
-    let num_electrons = 1;
-
-    log("Running SCF loop...".to_string());
-    solver.run_scf(&grid, &centers, &alphas, num_electrons);
+    solver.run_scf(&config);
 
     log("Solution found!".to_string());
     SIMULATION_STATE.lock().unwrap().dft_simulator = solver;

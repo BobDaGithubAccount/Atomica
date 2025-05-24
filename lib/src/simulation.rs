@@ -1,10 +1,131 @@
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 use lazy_static::lazy_static;
 use serde::{Serialize, Deserialize};
 use crate::dft_simulator::DFTSolver;
 
 lazy_static! {
     pub static ref SIMULATION_STATE: Mutex<SimulationState> = Mutex::new(SimulationState::default());
+
+    pub static ref SIMULATION_CONFIGS: Mutex<HashMap<String, SimulationConfig>> = {
+        let mut m = HashMap::new();
+        m.insert(
+            "hydrogen".to_string(),
+            SimulationConfig {
+                nuclei: vec![Nucleus {
+                    species: "H".into(),
+                    atomic_number: 1,
+                    coordinates: [0.0, 0.0, 0.0],
+                }],
+                num_electrons: 1,
+                basis: vec![GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0 }],
+                points_per_axis: 32,
+            },
+        );
+        m.insert(
+            "helium".to_string(),
+            SimulationConfig {
+                nuclei: vec![Nucleus {
+                    species: "He".into(),
+                    atomic_number: 2,
+                    coordinates: [0.0, 0.0, 0.0],
+                }],
+                num_electrons: 2,
+                basis: vec![GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.5 }],
+                points_per_axis: 32,
+            },
+        );
+        m.insert(
+            "h2_molecule".to_string(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus {
+                        species: "H".into(),
+                        atomic_number: 1,
+                        coordinates: [-0.37, 0.0, 0.0],
+                    },
+                    Nucleus {
+                        species: "H".into(),
+                        atomic_number: 1,
+                        coordinates: [0.37, 0.0, 0.0],
+                    },
+                ],
+                num_electrons: 2,
+                basis: vec![
+                    GaussianBasis { center: [-0.37, 0.0, 0.0], alpha: 1.0 },
+                    GaussianBasis { center: [0.37, 0.0, 0.0], alpha: 1.0 },
+                ],
+                points_per_axis: 32,
+            },
+        );
+        m.insert(
+            "h2_molecule_low_resolution".to_string(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus {
+                        species: "H".into(),
+                        atomic_number: 1,
+                        coordinates: [-1.0, 0.0, 0.0],
+                    },
+                    Nucleus {
+                        species: "H".into(),
+                        atomic_number: 1,
+                        coordinates: [1.0, 0.0, 0.0],
+                    },
+                ],
+                num_electrons: 2,
+                basis: vec![
+                    GaussianBasis { center: [-0.37, 0.0, 0.0], alpha: 1.0 },
+                    GaussianBasis { center: [0.37, 0.0, 0.0], alpha: 1.0 },
+                ],
+                points_per_axis: 10,
+            },
+        );
+        m.insert(
+            "oxygen".to_string(),
+            SimulationConfig {
+            points_per_axis: 32,
+            nuclei: vec![Nucleus {
+                species: "O".into(),
+                atomic_number: 8,
+                coordinates: [0.0, 0.0, 0.0],
+            }],
+            num_electrons: 8,
+            basis: vec![
+                GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0 },
+                GaussianBasis { center: [ 0.5, 0.0, 0.0], alpha: 0.5 },
+                GaussianBasis { center: [-0.5, 0.0, 0.0], alpha: 0.5 },
+                GaussianBasis { center: [0.0,  0.5, 0.0], alpha: 0.5 },
+                GaussianBasis { center: [0.0, -0.5, 0.0], alpha: 0.5 },
+                GaussianBasis { center: [0.0, 0.0,  0.5], alpha: 0.5 },
+                GaussianBasis { center: [0.0, 0.0, -0.5], alpha: 0.5 },
+            ],
+            },
+        );
+        m.insert(
+            "oxygen_low_res".to_string(),
+            SimulationConfig {
+            points_per_axis: 32,
+            nuclei: vec![Nucleus {
+                species: "O".into(),
+                atomic_number: 8,
+                coordinates: [0.0, 0.0, 0.0],
+            }],
+            num_electrons: 8,
+            basis: vec![
+                GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0 },
+                GaussianBasis { center: [ 0.5, 0.0, 0.0], alpha: 0.5 },
+                GaussianBasis { center: [-0.5, 0.0, 0.0], alpha: 0.5 },
+                GaussianBasis { center: [0.0,  0.5, 0.0], alpha: 0.5 },
+                GaussianBasis { center: [0.0, -0.5, 0.0], alpha: 0.5 },
+                GaussianBasis { center: [0.0, 0.0,  0.5], alpha: 0.5 },
+                GaussianBasis { center: [0.0, 0.0, -0.5], alpha: 0.5 },
+            ],
+            },
+        );
+
+
+        Mutex::new(m)
+    };
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +217,15 @@ pub struct SimulationConfig {
     pub basis: Vec<GaussianBasis>,
 }
 
+impl SimulationConfig {
+    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json_str)
+    }
+}
+
 impl Default for SimulationConfig {
     fn default() -> Self {
         SimulationConfig {
@@ -110,4 +240,5 @@ impl Default for SimulationConfig {
         }
     }
 }
+
 
