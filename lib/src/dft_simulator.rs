@@ -2,6 +2,7 @@ use crate::log;
 use nalgebra::DMatrix;
 use serde::{Deserialize, Serialize};
 use crate::simulation::*;
+use rustfft::{num_complex::Complex, FftPlanner};
 
 const TOLERANCE: f32 = 1e-3;
 const MAX_ITERATIONS: usize = 1000;
@@ -87,85 +88,270 @@ fn build_overlap_matrix(
     result
 }
 
+// fn build_full_hamiltonian(
+//     grid: &[[f32; 3]],
+//     centers: &[[f32; 3]],       // basis function centers
+//     alphas: &[f32],             // Gaussian exponents for each basis function
+//     atomic_centers: &[[f32; 3]],  // positions of nuclei
+//     atomic_charges: &[f32],       // nuclear charges (Z) for each atom
+//     density: &[f32],            // electron density on each grid point
+//     ) -> DMatrix<f32> {
+//     let n_basis = centers.len();
+//     let n_grid = grid.len();
+    
+//     let volume = grid.len() as f32;
+//     let d_v = volume / n_grid as f32; // integration weight per grid point
+//     log::info!("Volume: {}, dV: {}", volume, d_v);
+    
+//     // Small epsilon to avoid singularities in the Coulomb potential.
+//     let epsilon = 1e-6_f32;
+
+//     let mut hamiltonian = DMatrix::<f32>::zeros(n_basis, n_basis);
+
+//     // Loop over each pair of basis functions.
+//     for i in 0..n_basis {
+//         for j in 0..n_basis {
+//             let mut hij = 0.0_f32;
+
+//             // Integrate over grid points.
+//             for (k, point) in grid.iter().enumerate() {
+//                 // Evaluate basis function i
+//                 let dx_i = point[0] - centers[i][0];
+//                 let dy_i = point[1] - centers[i][1];
+//                 let dz_i = point[2] - centers[i][2];
+//                 let r2_i = dx_i * dx_i + dy_i * dy_i + dz_i * dz_i;
+//                 let phi_i = (-alphas[i] * r2_i).exp();
+
+//                 // Evaluate basis function j
+//                 let dx_j = point[0] - centers[j][0];
+//                 let dy_j = point[1] - centers[j][1];
+//                 let dz_j = point[2] - centers[j][2];
+//                 let r2_j = dx_j * dx_j + dy_j * dy_j + dz_j * dz_j;
+//                 let phi_j = (-alphas[j] * r2_j).exp();
+
+//                 // Analytic Laplacian of a Gaussian:
+//                 let laplacian_phi_j = (4.0 * alphas[j] * alphas[j] * r2_j - 6.0 * alphas[j]) * phi_j;
+
+//                 // Kinetic energy term
+//                 let kinetic = -0.5 * phi_i * laplacian_phi_j;
+
+//                 // Nuclear Coulomb potential
+//                 let mut v_nuc = 0.0_f32;
+//                 for (a, atom_center) in atomic_centers.iter().enumerate() {
+//                     let dx_a = point[0] - atom_center[0];
+//                     let dy_a = point[1] - atom_center[1];
+//                     let dz_a = point[2] - atom_center[2];
+//                     let r_a = (dx_a * dx_a + dy_a * dy_a + dz_a * dz_a)
+//                         .sqrt()
+//                         .max(epsilon);
+//                     v_nuc += -atomic_charges[a] / r_a;
+//                 }
+
+//                 // Exchange–correlation potential:
+//                 // V_xc(r) = EXCHANGE_CORRELATION_CONSTANT * ρ(r)^(1/3)
+//                 // This constant is for an ideal electron gas. Non LDA approaches are more accurate but more complex.
+//                 let density_val = density[k].max(1e-12);
+//                 let v_xc = EXCHANGE_CORRELATION_CONSTANT * density_val.powf(1.0 / 3.0);
+
+//                 let v_total = v_nuc + v_xc;
+
+//                 // Potential energy term
+//                 let potential = phi_i * v_total * phi_j;
+
+//                 // Sum contributions with the integration weight (scale for volume element).
+//                 hij += (kinetic + potential) * d_v;
+//             }
+//             hamiltonian[(i, j)] = hij;
+//         }
+//     }
+
+//     hamiltonian
+// }
+
+///// Poisson solver for the electron density. (FFT scaling instead of O(N^2) for large systems)
+
+fn compute_hartree_potential_fft(
+    density: &[f32],
+    points_per_axis: usize,
+) -> Vec<f32> {
+    let n = points_per_axis;
+    let n_grid = n * n * n;
+    let l = points_per_axis as f32;
+    let delta = (l as f32) / (n as f32); // assume grid spacing. NOTE: BE CAREFUL WITH THIS!
+    log::info!("Computing Hartree potential on {}³ grid with delta = {}", n, delta);
+    if density.len() != n_grid {
+        panic!("Density length {} does not match grid size {}", density.len(), n_grid);
+    }
+    let vol = l * l * l;
+
+    // 1) pack density into complex array for FFT
+    let mut data: Vec<Complex<f32>> = density
+        .iter()
+        .map(|&r| Complex::new(r, 0.0))
+        .collect();
+
+    // 2) forward 3D FFT (we do it as n^2 row‐FFTs on each axis)
+    let mut planner = FftPlanner::<f32>::new();
+    let fft = planner.plan_fft_forward(n);
+    let ifft = planner.plan_fft_inverse(n);
+
+    // helper to index (i,j,k) -> flat
+    let idx = |i, j, k| (i * n + j) * n + k;
+
+    // FFT along k
+    for i in 0..n {
+        for j in 0..n {
+            let mut row: Vec<_> = (0..n).map(|k| data[idx(i, j, k)]).collect();
+            fft.process(&mut row);
+            for k in 0..n { data[idx(i, j, k)] = row[k]; }
+        }
+    }
+    // FFT along j
+    for i in 0..n {
+        for k in 0..n {
+            let mut row: Vec<_> = (0..n).map(|j| data[idx(i, j, k)]).collect();
+            fft.process(&mut row);
+            for j in 0..n { data[idx(i, j, k)] = row[j]; }
+        }
+    }
+    // FFT along i
+    for j in 0..n {
+        for k in 0..n {
+            let mut row: Vec<_> = (0..n).map(|i| data[idx(i, j, k)]).collect();
+            fft.process(&mut row);
+            for i in 0..n { data[idx(i, j, k)] = row[i]; }
+        }
+    }
+
+    // 3) Solve in k‐space: V(k) = (4π / |k|²) ρ(k), with k = 2π·m/L
+    for i in 0..n {
+        let ki = if i <= n/2 { i as f32 } else { (i as f32) - (n as f32) };
+        let kx = 2.0 * std::f32::consts::PI * ki / l;
+        for j in 0..n {
+            let kj = if j <= n/2 { j as f32 } else { (j as f32) - (n as f32) };
+            let ky = 2.0 * std::f32::consts::PI * kj / l;
+            for k in 0..n {
+                let kk = if k <= n/2 { k as f32 } else { (k as f32) - (n as f32) };
+                let kz = 2.0 * std::f32::consts::PI * kk / l;
+
+                let k2 = kx*kx + ky*ky + kz*kz;
+                let index = idx(i, j, k);
+                if k2.abs() < 1e-12 {
+                    data[index] = Complex::new(0.0, 0.0); // zero‐mode
+                } else {
+                    // Poisson: ∇²V = -4πρ  ⇒  V(k) = 4π ρ(k) / k²
+                    data[index] *= Complex::new(4.0 * std::f32::consts::PI / k2, 0.0);
+                }
+            }
+        }
+    }
+
+    // 4) inverse 3D FFT
+    // along i
+    for j in 0..n {
+        for k in 0..n {
+            let mut row: Vec<_> = (0..n).map(|i| data[idx(i, j, k)]).collect();
+            ifft.process(&mut row);
+            for i in 0..n { data[idx(i, j, k)] = row[i]; }
+        }
+    }
+    // along j
+    for i in 0..n {
+        for k in 0..n {
+            let mut row: Vec<_> = (0..n).map(|j| data[idx(i, j, k)]).collect();
+            ifft.process(&mut row);
+            for j in 0..n { data[idx(i, j, k)] = row[j]; }
+        }
+    }
+    // along k
+    for i in 0..n {
+        for j in 0..n {
+            let mut row: Vec<_> = (0..n).map(|k| data[idx(i, j, k)]).collect();
+            ifft.process(&mut row);
+            for k in 0..n { data[idx(i, j, k)] = row[k]; }
+        }
+    }
+
+    // 5) normalize and extract real part
+    data
+        .into_iter()
+        .map(|c| c.re / (n_grid as f32))  // rustfft doesn’t normalize inverse
+        .collect()
+}
+
 fn build_full_hamiltonian(
     grid: &[[f32; 3]],
-    centers: &[[f32; 3]],       // basis function centers
-    alphas: &[f32],             // Gaussian exponents for each basis function
-    atomic_centers: &[[f32; 3]],  // positions of nuclei
-    atomic_charges: &[f32],       // nuclear charges (Z) for each atom
-    density: &[f32],            // electron density on each grid point
-    ) -> DMatrix<f32> {
+    centers: &[[f32; 3]],
+    alphas: &[f32],
+    atomic_centers: &[[f32; 3]],
+    atomic_charges: &[f32],
+    density: &[f32],
+) -> DMatrix<f32> {
     let n_basis = centers.len();
-    let n_grid = grid.len();
-    
-    let volume = grid.len() as f32;
-    let d_v = volume / n_grid as f32; // integration weight per grid point
-    log::info!("Volume: {}, dV: {}", volume, d_v);
-    
-    // Small epsilon to avoid singularities in the Coulomb potential.
-    let epsilon = 1e-6_f32;
+    let n_grid  = grid.len();
+    let points_per_axis = (n_grid as f32).cbrt() as usize;
+    let volume = n_grid as f32;
+    let d_v    = volume / (n_grid as f32);
+
+    log::info!("Building Hartree via FFT on {}³ grid…", points_per_axis);
+    let v_hartree = compute_hartree_potential_fft(density, points_per_axis);
 
     let mut hamiltonian = DMatrix::<f32>::zeros(n_basis, n_basis);
+    let epsilon = 1e-6_f32;
 
-    // Loop over each pair of basis functions.
     for i in 0..n_basis {
         for j in 0..n_basis {
             let mut hij = 0.0_f32;
 
-            // Integrate over grid points.
             for (k, point) in grid.iter().enumerate() {
-                // Evaluate basis function i
+                // φ_i, φ_j & KPE
                 let dx_i = point[0] - centers[i][0];
                 let dy_i = point[1] - centers[i][1];
                 let dz_i = point[2] - centers[i][2];
-                let r2_i = dx_i * dx_i + dy_i * dy_i + dz_i * dz_i;
+                let r2_i = dx_i*dx_i + dy_i*dy_i + dz_i*dz_i;
                 let phi_i = (-alphas[i] * r2_i).exp();
 
-                // Evaluate basis function j
                 let dx_j = point[0] - centers[j][0];
                 let dy_j = point[1] - centers[j][1];
                 let dz_j = point[2] - centers[j][2];
-                let r2_j = dx_j * dx_j + dy_j * dy_j + dz_j * dz_j;
+                let r2_j = dx_j*dx_j + dy_j*dy_j + dz_j*dz_j;
                 let phi_j = (-alphas[j] * r2_j).exp();
 
-                // Analytic Laplacian of a Gaussian:
-                let laplacian_phi_j = (4.0 * alphas[j] * alphas[j] * r2_j - 6.0 * alphas[j]) * phi_j;
-
-                // Kinetic energy term
+                let laplacian_phi_j =
+                    (4.0 * alphas[j]*alphas[j] * r2_j - 6.0 * alphas[j]) * phi_j;
                 let kinetic = -0.5 * phi_i * laplacian_phi_j;
 
-                // Nuclear Coulomb potential
+                // nuclear potential
                 let mut v_nuc = 0.0_f32;
                 for (a, atom_center) in atomic_centers.iter().enumerate() {
                     let dx_a = point[0] - atom_center[0];
                     let dy_a = point[1] - atom_center[1];
                     let dz_a = point[2] - atom_center[2];
-                    let r_a = (dx_a * dx_a + dy_a * dy_a + dz_a * dz_a)
-                        .sqrt()
-                        .max(epsilon);
+                    let r_a  = (dx_a*dx_a + dy_a*dy_a + dz_a*dz_a)
+                                .sqrt()
+                                .max(epsilon);
                     v_nuc += -atomic_charges[a] / r_a;
                 }
 
-                // Exchange–correlation potential:
-                // V_xc(r) = EXCHANGE_CORRELATION_CONSTANT * ρ(r)^(1/3)
-                // This constant is for an ideal electron gas. Non LDA approaches are more accurate but more complex.
-                let density_val = density[k].max(1e-12);
-                let v_xc = EXCHANGE_CORRELATION_CONSTANT * density_val.powf(1.0 / 3.0);
+                // exchange‐correlation
+                let rho = density[k].max(1e-12_f32);
+                let v_xc = EXCHANGE_CORRELATION_CONSTANT * rho.powf(1.0/3.0);
 
-                let v_total = v_nuc + v_xc;
-
-                // Potential energy term
+                // total KS potential with FFT-derived Hartree
+                let v_total = v_nuc + v_hartree[k] + v_xc;
                 let potential = phi_i * v_total * phi_j;
 
-                // Sum contributions with the integration weight (scale for volume element).
                 hij += (kinetic + potential) * d_v;
             }
+
             hamiltonian[(i, j)] = hij;
         }
     }
 
     hamiltonian
 }
+
+/////
 
 /// Update the electron density on the grid from the occupied eigenfunctions.
 fn update_density(
