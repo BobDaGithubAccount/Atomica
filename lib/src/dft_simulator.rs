@@ -41,16 +41,46 @@ impl DFTSolver {
 
     /// Run the self-consistent field (SCF) simulation.
     /// This function calls the SCF loop and stores the final electron density and eigenvalues.
-    pub fn run_scf(
-        &mut self,
-        grid: &[[f32; 3]],
-        centers: &[[f32; 3]],
-        alphas: &[f32],
-        num_electrons: usize,
-    ) {
-        let (density, eigenvalues) = scf_loop(grid, centers, alphas, num_electrons);
+    // pub fn run_scf(
+    //     &mut self,
+    //     grid: &[[f32; 3]],
+    //     centers: &[[f32; 3]],
+    //     alphas: &[f32],
+    //     num_electrons: usize,
+    // ) {
+    //     let (density, eigenvalues) = scf_loop(grid, centers, alphas, num_electrons);
+    //     self.final_density = density;
+    //     self.eigenvalues = eigenvalues;
+    // }
+    pub fn run_scf(&mut self, config: &SimulationConfig) {
+        let grid = self.build_grid(config.points_per_axis);
+
+        let (centers, alphas): (Vec<_>, Vec<_>) = config
+            .basis
+            .iter()
+            .map(|b| (b.center, b.alpha))
+            .unzip();
+
+        let (atom_centers, atom_charges): (Vec<[f32;3]>, Vec<f32>) = config
+            .nuclei
+            .iter()
+            .map(|n| ([
+                n.coordinates[0] as f32,
+                n.coordinates[1] as f32,
+                n.coordinates[2] as f32
+            ], n.atomic_number as f32))
+            .unzip();
+
+        let (density, eigenvalues) = scf_loop(
+            &grid,
+            &centers,
+            &alphas,
+            config.num_electrons,
+            &atom_centers,
+            &atom_charges,
+        );
         self.final_density = density;
-        self.eigenvalues = eigenvalues;
+        self.eigenvalues   = eigenvalues;
     }
 }
 
@@ -101,7 +131,7 @@ fn compute_hartree_potential_fft(
     if density.len() != n_grid {
         panic!("Density length {} does not match grid size {}", density.len(), n_grid);
     }
-    let vol = l * l * l;
+    // let vol = l * l * l;
 
     // 1) pack density into complex array for FFT
     let mut data: Vec<Complex<f32>> = density
@@ -212,7 +242,7 @@ fn build_full_hamiltonian(
     let volume = n_grid as f32;
     let d_v    = volume / (n_grid as f32);
 
-    // log::info!("Building Hartree via FFT on {}³ grid…", points_per_axis);
+    // FFT-based Hartree potential remains unchanged.
     let v_hartree = compute_hartree_potential_fft(density, points_per_axis);
 
     let mut hamiltonian = DMatrix::<f32>::zeros(n_basis, n_basis);
@@ -223,7 +253,7 @@ fn build_full_hamiltonian(
             let mut hij = 0.0_f32;
 
             for (k, point) in grid.iter().enumerate() {
-                // φ_i, φ_j & KPE
+                // φ_i, φ_j & kinetic energy
                 let dx_i = point[0] - centers[i][0];
                 let dy_i = point[1] - centers[i][1];
                 let dz_i = point[2] - centers[i][2];
@@ -240,7 +270,7 @@ fn build_full_hamiltonian(
                     (4.0 * alphas[j]*alphas[j] * r2_j - 6.0 * alphas[j]) * phi_j;
                 let kinetic = -0.5 * phi_i * laplacian_phi_j;
 
-                // nuclear potential
+                // nuclear attraction using passed-in nuclei
                 let mut v_nuc = 0.0_f32;
                 for (a, atom_center) in atomic_centers.iter().enumerate() {
                     let dx_a = point[0] - atom_center[0];
@@ -252,11 +282,11 @@ fn build_full_hamiltonian(
                     v_nuc += -atomic_charges[a] / r_a;
                 }
 
-                // exchange‐correlation
+                // exchange–correlation
                 let rho = density[k].max(1e-12_f32);
                 let v_xc = EXCHANGE_CORRELATION_CONSTANT * rho.powf(1.0/3.0);
 
-                // total KS potential with FFT-derived Hartree
+                // total KS potential
                 let v_total = v_nuc + v_hartree[k] + v_xc;
                 let potential = phi_i * v_total * phi_j;
 
@@ -322,17 +352,15 @@ fn scf_loop(
     centers: &[[f32; 3]],
     alphas: &[f32],
     num_electrons: usize,
+    atomic_centers: &[[f32; 3]],      // moved in as parameters
+    atomic_charges: &[f32],           // moved in as parameters
 ) -> (Vec<f32>, Option<Vec<f32>>) {
     let n_grid = grid.len();
-    let n_basis = centers.len();
+    // let n_basis = centers.len();
     // Initial guess for the density.
     let mut density = vec![0.1_f32; n_grid];
     let damping_factor = 0.2_f32;
     let mut eigenvalues_result = None;
-
-    //TODO make this configurable
-    let atomic_centers: Vec<[f32; 3]> = vec![[0.0, 0.0, 0.0]];
-    let atomic_charges: Vec<f32> = vec![1.0];
 
     for iter in 0..MAX_ITERATIONS {
         log(format!("Iteration {}...", iter + 1));
@@ -342,16 +370,11 @@ fn scf_loop(
             grid,
             centers,
             alphas,
-            &atomic_centers,
-            &atomic_charges,
+            atomic_centers,
+            atomic_charges,
             &density,
         );
         let overlap = build_overlap_matrix(grid, centers, alphas);
-
-        // Diagonalize the Hamiltonian (symmetric eigen–problem).
-        // let eigen = hamiltonian.symmetric_eigen();
-        // let eigenvalues = eigen.eigenvalues.clone();
-        // let eigenvectors = eigen.eigenvectors;
 
         // generalised eigen problem:
         // 1) Cholesky-decompose
@@ -368,7 +391,7 @@ fn scf_loop(
         // 3) Diagonalize H̃
         let eig = Ht.symmetric_eigen();
         let eps = eig.eigenvalues.clone();
-        let mut Ctilde = eig.eigenvectors;  // columns are eigenvectors in the transformed basis (thanks copilot!)
+        let mut Ctilde = eig.eigenvectors;
 
         // 4) Back-transform to original basis
         let C = Linv.transpose() * Ctilde;
@@ -383,7 +406,13 @@ fn scf_loop(
         ));
 
         // Update the electron density from the occupied states.
-        let new_density = update_density(grid, &eigenvectors, centers, alphas, num_electrons);
+        let new_density = update_density(
+            grid,
+            &eigenvectors,
+            centers,
+            alphas,
+            num_electrons,
+        );
 
         // Apply damping.
         for k in 0..n_grid {
@@ -402,6 +431,7 @@ fn scf_loop(
             return (density, eigenvalues_result);
         }
     }
+
     println!("SCF did not converge.");
     (density, None)
 }

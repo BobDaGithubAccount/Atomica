@@ -26,7 +26,7 @@ pub struct SimulationState {
     pub total_time: f64,                  // Total simulation time in a.u. (irrelevant for now)
     pub status: SimulationStatus,         // Status of the simulation
     pub dft_simulator: DFTSolver,         // DFT solver instance
-    pub file_context: Option<String>,     // Can be written to as if it were a file (this can be handled separately)
+    pub file_context: Option<String>,     // Can be written to as if it were a file (this can be handled separately) LATER
 }
 
 impl SimulationState {
@@ -82,4 +82,32 @@ impl Default for SimulationState {
     }
 }
 
-//TODO: Use these datastructures in the simulation code (better)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GaussianBasis {
+    pub center: [f32; 3],
+    pub alpha:  f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulationConfig {
+    pub points_per_axis: usize,
+    pub nuclei: Vec<Nucleus>,
+    pub num_electrons: usize,
+    pub basis: Vec<GaussianBasis>,
+}
+
+impl Default for SimulationConfig {
+    fn default() -> Self {
+        SimulationConfig {
+            points_per_axis: 32,
+            nuclei: vec![Nucleus {
+                species: "H".into(),
+                atomic_number: 1,
+                coordinates: [0.0, 0.0, 0.0],
+            }],
+            num_electrons: 1,
+            basis: vec![ GaussianBasis { center: [0.0,0.0,0.0], alpha: 1.0 } ],
+        }
+    }
+}
+
