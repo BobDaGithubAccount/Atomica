@@ -98,7 +98,7 @@ fn compute_hartree_potential_fft(
     let n_grid = n * n * n;
     let l = points_per_axis as f32;
     let delta = (l as f32) / (n as f32); // assume grid spacing. NOTE: BE CAREFUL WITH THIS!
-    log::info!("Computing Hartree potential on {}³ grid with delta = {}", n, delta);
+    log(format!("Computing Hartree potential on {}³ grid with delta = {}", n, delta));
     if density.len() != n_grid {
         panic!("Density length {} does not match grid size {}", density.len(), n_grid);
     }
@@ -213,7 +213,7 @@ fn build_full_hamiltonian(
     let volume = n_grid as f32;
     let d_v    = volume / (n_grid as f32);
 
-    log::info!("Building Hartree via FFT on {}³ grid…", points_per_axis);
+    // log::info!("Building Hartree via FFT on {}³ grid…", points_per_axis);
     let v_hartree = compute_hartree_potential_fft(density, points_per_axis);
 
     let mut hamiltonian = DMatrix::<f32>::zeros(n_basis, n_basis);
@@ -347,11 +347,36 @@ fn scf_loop(
             &atomic_charges,
             &density,
         );
+        let overlap = build_overlap_matrix(grid, centers, alphas);
 
         // Diagonalize the Hamiltonian (symmetric eigen–problem).
-        let eigen = hamiltonian.symmetric_eigen();
-        let eigenvalues = eigen.eigenvalues.clone();
-        let eigenvectors = eigen.eigenvectors;
+        // let eigen = hamiltonian.symmetric_eigen();
+        // let eigenvalues = eigen.eigenvalues.clone();
+        // let eigenvectors = eigen.eigenvectors;
+
+        // generalised eigen problem:
+        // 1) Cholesky-decompose
+        let chol = overlap
+            .clone()
+            .cholesky()
+            .expect("Overlap matrix not positive-definite");
+        let L = chol.l();
+
+        // 2) Form the transformed Hamiltonian:
+        let Linv = L.clone().try_inverse().unwrap();
+        let Ht = &Linv * &hamiltonian * &Linv.transpose();
+
+        // 3) Diagonalize H̃
+        let eig = Ht.symmetric_eigen();
+        let eps = eig.eigenvalues.clone();
+        let mut Ctilde = eig.eigenvectors;  // columns are eigenvectors in the transformed basis (thanks copilot!)
+
+        // 4) Back-transform to original basis
+        let C = Linv.transpose() * Ctilde;
+
+        let eigenvalues = eps;
+        let eigenvectors = C;
+
         log(format!(
             "Eigenvalues (first {}): {:?}",
             num_electrons,
