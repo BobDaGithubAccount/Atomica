@@ -393,7 +393,7 @@ fn scf_loop(
         // 3) Diagonalize H̃
         let eig = Ht.symmetric_eigen();
         let eps = eig.eigenvalues.clone();
-        let mut Ctilde = eig.eigenvectors;
+        let Ctilde = eig.eigenvectors;
 
         // 4) Back-transform to original basis
         let C = Linv.transpose() * Ctilde;
@@ -403,7 +403,7 @@ fn scf_loop(
 
         log(format!(
             "Eigenvalues (first {}): {:?}",
-            num_electrons,
+            eigenvalues.len(),
             &eigenvalues.as_slice()[0..num_electrons.min(eigenvalues.len())]
         ));
 

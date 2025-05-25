@@ -27,7 +27,6 @@ nalgebra = "0.31"
 itertools = "0.10"
 getrandom = { version = "0.2", features = ["js"] }
 rustfft = "6.3.0"
-marching-cubes = "0.1.2" # NOTE: using structs from this crate, not the functions
 
 [lib]
 crate-type = ["cdylib", "rlib"]

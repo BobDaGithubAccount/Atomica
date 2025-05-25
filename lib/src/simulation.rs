@@ -80,6 +80,7 @@ lazy_static! {
                 points_per_axis: 10,
             },
         );
+        //EXPERIMENTAL - this is what I'm targeting as a proof of concept for the DFT solver
         m.insert(
             "oxygen".to_string(),
             SimulationConfig {
@@ -98,13 +99,21 @@ lazy_static! {
                 GaussianBasis { center: [0.0, -0.5, 0.0], alpha: 0.5 },
                 GaussianBasis { center: [0.0, 0.0,  0.5], alpha: 0.5 },
                 GaussianBasis { center: [0.0, 0.0, -0.5], alpha: 0.5 },
+                
+                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 130.70932 },
+                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 23.808861 },
+                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 6.4436083 },
+                // // Polarization functions
+                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0 }, // d-type function
+                // // Diffuse functions
+                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 0.1687144 },
             ],
             },
         );
         m.insert(
             "oxygen_low_res".to_string(),
             SimulationConfig {
-            points_per_axis: 32,
+            points_per_axis: 16,
             nuclei: vec![Nucleus {
                 species: "O".into(),
                 atomic_number: 8,
