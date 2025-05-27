@@ -54,27 +54,15 @@ impl DFTSolver {
     // }
     pub fn run_scf(&mut self, config: &SimulationConfig) {
         let grid = self.build_grid(config.points_per_axis);
-
-        let (centers, alphas): (Vec<_>, Vec<_>) = config
-            .basis
-            .iter()
-            .map(|b| (b.center, b.alpha))
-            .unzip();
-
         let (atom_centers, atom_charges): (Vec<[f32;3]>, Vec<f32>) = config
             .nuclei
             .iter()
-            .map(|n| ([
-                n.coordinates[0] as f32,
-                n.coordinates[1] as f32,
-                n.coordinates[2] as f32
-            ], n.atomic_number as f32))
+            .map(|n| ([n.coordinates[0] as f32, n.coordinates[1] as f32, n.coordinates[2] as f32], n.atomic_number as f32))
             .unzip();
 
         let (density, eigenvalues) = scf_loop(
             &grid,
-            &centers,
-            &alphas,
+            &config.basis,
             config.num_electrons,
             &atom_centers,
             &atom_charges,
@@ -86,35 +74,22 @@ impl DFTSolver {
 
 fn build_overlap_matrix(
     grid: &[[f32; 3]],
-    centers: &[[f32; 3]],
-    alphas: &[f32],
+    basis: &[Box<dyn BasisFunction>],
 ) -> DMatrix<f32> {
-    let n_basis = centers.len();
-    let n_grid = grid.len();
-    let mut result = DMatrix::<f32>::zeros(n_basis, n_basis);
+    let n = basis.len();
+    let mut S = DMatrix::<f32>::zeros(n, n);
 
-    for i in 0..n_basis {
-        for j in 0..n_basis {
-            let mut s = 0.0_f32;
-            for k in 0..n_grid {
-                // Gaussian centered at center i.
-                let dx_i = grid[k][0] - centers[i][0];
-                let dy_i = grid[k][1] - centers[i][1];
-                let dz_i = grid[k][2] - centers[i][2];
-                let g_i = (-alphas[i] * (dx_i * dx_i + dy_i * dy_i + dz_i * dz_i)).exp();
-
-                // Gaussian centered at center j.
-                let dx_j = grid[k][0] - centers[j][0];
-                let dy_j = grid[k][1] - centers[j][1];
-                let dz_j = grid[k][2] - centers[j][2];
-                let g_j = (-alphas[j] * (dx_j * dx_j + dy_j * dy_j + dz_j * dz_j)).exp();
-
-                s += g_i * g_j;
+    for i in 0..n {
+        for j in 0..n {
+            let mut sum = 0.0;
+            for &pt in grid {
+                sum += basis[i].value(&pt) * basis[j].value(&pt);
             }
-            result[(i, j)] = s;
+            S[(i, j)] = sum;
         }
     }
-    result
+
+    S
 }
 
 ///// Poisson solver for the electron density. (FFT scaling instead of O(N^2) for large systems)
@@ -229,117 +204,81 @@ fn compute_hartree_potential_fft(
 }
 
 fn build_full_hamiltonian(
-    grid: &[[f32; 3]],
-    centers: &[[f32; 3]],
-    alphas: &[f32],
-    atomic_centers: &[[f32; 3]],
+    grid: &[[f32;3]],
+    basis: &[Box<dyn BasisFunction>],
+    atomic_centers: &[[f32;3]],
     atomic_charges: &[f32],
     density: &[f32],
 ) -> DMatrix<f32> {
-    let n_basis = centers.len();
-    let n_grid  = grid.len();
-    let points_per_axis = (n_grid as f32).cbrt() as usize;
-    let volume = n_grid as f32;
-    let d_v    = volume / (n_grid as f32);
+    let n = basis.len();
+    let n_grid = grid.len();
+    let dv = 1.0 / n_grid as f32;
+    let v_h = compute_hartree_potential_fft(density, (n_grid as f32).cbrt() as usize);
 
-    // FFT-based Hartree potential remains unchanged.
-    let v_hartree = compute_hartree_potential_fft(density, points_per_axis);
+    let mut H = DMatrix::<f32>::zeros(n, n);
+    for i in 0..n {
+        for j in 0..n {
+            let mut hij = 0.0;
+            for (k, &pt) in grid.iter().enumerate() {
+                let φi = basis[i].value(&pt);
+                let φj = basis[j].value(&pt);
 
-    log(format!("Building full Hamiltonian on {}³ grid with {} basis functions given hartree result", points_per_axis, n_basis));
-
-    let mut hamiltonian = DMatrix::<f32>::zeros(n_basis, n_basis);
-    let epsilon = 1e-6_f32;
-
-    for i in 0..n_basis {
-        for j in 0..n_basis {
-            let mut hij = 0.0_f32;
-
-            for (k, point) in grid.iter().enumerate() {
-                // φ_i, φ_j & kinetic energy
-                let dx_i = point[0] - centers[i][0];
-                let dy_i = point[1] - centers[i][1];
-                let dz_i = point[2] - centers[i][2];
-                let r2_i = dx_i*dx_i + dy_i*dy_i + dz_i*dz_i;
-                let phi_i = (-alphas[i] * r2_i).exp();
-
-                let dx_j = point[0] - centers[j][0];
-                let dy_j = point[1] - centers[j][1];
-                let dz_j = point[2] - centers[j][2];
-                let r2_j = dx_j*dx_j + dy_j*dy_j + dz_j*dz_j;
-                let phi_j = (-alphas[j] * r2_j).exp();
-
-                let laplacian_phi_j =
-                    (4.0 * alphas[j]*alphas[j] * r2_j - 6.0 * alphas[j]) * phi_j;
-                let kinetic = -0.5 * phi_i * laplacian_phi_j;
-
-                // nuclear attraction using passed-in nuclei
-                let mut v_nuc = 0.0_f32;
-                for (a, atom_center) in atomic_centers.iter().enumerate() {
-                    let dx_a = point[0] - atom_center[0];
-                    let dy_a = point[1] - atom_center[1];
-                    let dz_a = point[2] - atom_center[2];
-                    let r_a  = (dx_a*dx_a + dy_a*dy_a + dz_a*dz_a)
-                                .sqrt()
-                                .max(epsilon);
-                    v_nuc += -atomic_charges[a] / r_a;
+                // nuclear attraction
+                let mut v_nuc = 0.0;
+                for (ac, &charge) in atomic_centers.iter().zip(atomic_charges) {
+                    let dx = pt[0] - ac[0];
+                    let dy = pt[1] - ac[1];
+                    let dz = pt[2] - ac[2];
+                    let r  = (dx*dx + dy*dy + dz*dz).sqrt().max(1e-6);
+                    v_nuc += -charge / r;
                 }
 
                 // exchange–correlation
-                let rho = density[k].max(1e-12_f32);
-                let v_xc = EXCHANGE_CORRELATION_CONSTANT * rho.powf(1.0/3.0);
+                let ρ   = density[k].max(1e-12);
+                let v_xc = EXCHANGE_CORRELATION_CONSTANT * ρ.powf(1.0/3.0);
 
-                // total KS potential
-                let v_total = v_nuc + v_hartree[k] + v_xc;
-                let potential = phi_i * v_total * phi_j;
-
-                hij += (kinetic + potential) * d_v;
+                hij += (φi * (v_nuc + v_h[k] + v_xc) * φj) * dv;
             }
-
-            hamiltonian[(i, j)] = hij;
+            H[(i,j)] = hij;
         }
     }
 
-    hamiltonian
+    H
 }
 
 /////
 
 /// Update the electron density on the grid from the occupied eigenfunctions.
 fn update_density(
-    grid: &[[f32; 3]],
-    eigenvectors: &DMatrix<f32>, // Expected shape: (n_basis, n_occ)
-    centers: &[[f32; 3]],
-    alphas: &[f32],
+    grid: &[[f32;3]],
+    eigenvectors: &DMatrix<f32>,
+    basis: &[Box<dyn BasisFunction>],
     num_electrons: usize,
 ) -> Vec<f32> {
-    let n_basis = centers.len();
     let n_grid = grid.len();
-    let n_occ = num_electrons.min(eigenvectors.ncols());
-    let mut density = vec![0.0_f32; n_grid];
+    let n_occ  = num_electrons.min(eigenvectors.ncols());
+    let mut density = vec![0.0; n_grid];
 
-    for (gid, point) in grid.iter().enumerate() {
-        let mut total = 0.0;
-        for i in 0..n_occ {
-            let mut psi = 0.0_f32;
-            for j in 0..n_basis {
-                let dx = point[0] - centers[j][0];
-                let dy = point[1] - centers[j][1];
-                let dz = point[2] - centers[j][2];
-                let g = (-alphas[j] * (dx * dx + dy * dy + dz * dz)).exp();
-                psi += eigenvectors[(j, i)] * g;
+    for (k, &pt) in grid.iter().enumerate() {
+        let mut ρ_sum = 0.0;
+        for occ in 0..n_occ {
+            let mut ψ = 0.0;
+            for b in 0..basis.len() {
+                ψ += eigenvectors[(b, occ)] * basis[b].value(&pt);
             }
-            total += psi * psi;
+            ρ_sum += ψ * ψ;
         }
-        density[gid] = total;
+        density[k] = ρ_sum;
     }
 
-    // Normalise the density so that the sum equals the number of electrons.
-    let sum: f32 = density.iter().sum();
-    if sum > 0.0 {
+    // normalize to N electrons
+    let total: f32 = density.iter().sum();
+    if total > 0.0 {
         for d in &mut density {
-            *d /= sum;
+            *d /= total;
         }
     }
+
     density
 }
 
@@ -350,121 +289,65 @@ fn update_density(
 /// 4. Apply damping, and
 /// 5. Check for convergence.
 fn scf_loop(
-    grid: &[[f32; 3]],
-    centers: &[[f32; 3]],
-    alphas: &[f32],
+    grid: &[[f32;3]],
+    basis: &[Box<dyn BasisFunction>],
     num_electrons: usize,
-    atomic_centers: &[[f32; 3]],
+    atomic_centers: &[[f32;3]],
     atomic_charges: &[f32],
 ) -> (Vec<f32>, Option<Vec<f32>>) {
-    let n_grid = grid.len();
-    // let n_basis = centers.len();
-    // Initial guess for the density.
-    let mut density = vec![0.1_f32; n_grid];
-    let damping_factor = 0.2_f32;
-    let mut eigenvalues_result = None;
+    let mut density = vec![1.0 / (grid.len() as f32); grid.len()];
 
     for iter in 0..MAX_ITERATIONS {
-        log(format!("Iteration {}...", iter + 1));
+        log(format!("SCF iteration {}", iter + 1));
 
-        // Build the full Hamiltonian.
-        let hamiltonian = build_full_hamiltonian(
-            grid,
-            centers,
-            alphas,
-            atomic_centers,
-            atomic_charges,
-            &density,
-        );
-        let overlap = build_overlap_matrix(grid, centers, alphas);
+        let H = build_full_hamiltonian(grid, basis, atomic_centers, atomic_charges, &density);
+        let S = build_overlap_matrix(grid, basis);
 
-        // generalised eigen problem:
-        // 1) Cholesky-decompose
-        let chol = overlap
-            .clone()
-            .cholesky()
-            .expect("Overlap matrix not positive-definite");
-        let L = chol.l();
-
-        // 2) Form the transformed Hamiltonian:
+        // generalized eigenproblem H C = S C ε
+        let L    = S.clone().cholesky().expect("Overlap not PD").l();
         let Linv = L.clone().try_inverse().unwrap();
-        let Ht = &Linv * &hamiltonian * &Linv.transpose();
+        let Ht   = &Linv * &H * &Linv.transpose();
+        let eig  = Ht.symmetric_eigen();
+        let C    = Linv.transpose() * eig.eigenvectors;
 
-        // 3) Diagonalize H̃
-        let eig = Ht.symmetric_eigen();
-        let eps = eig.eigenvalues.clone();
-        let Ctilde = eig.eigenvectors;
+        let new_d = update_density(grid, &C, basis, num_electrons);
 
-        // 4) Back-transform to original basis
-        let C = Linv.transpose() * Ctilde;
-
-        let eigenvalues = eps;
-        let eigenvectors = C;
-
-        log(format!(
-            "Eigenvalues (first {}): {:?}",
-            eigenvalues.len(),
-            &eigenvalues.as_slice()[0..num_electrons.min(eigenvalues.len())]
-        ));
-
-        // Update the electron density from the occupied states.
-        let new_density = update_density(
-            grid,
-            &eigenvectors,
-            centers,
-            alphas,
-            num_electrons,
-        );
-
-        // Apply damping.
-        for k in 0..n_grid {
-            density[k] = damping_factor * new_density[k] + (1.0 - damping_factor) * density[k];
+        // simple linear mixing
+        let diff: f32 = new_d.iter()
+            .zip(density.iter())
+            .map(|(a,b)| (a - b).abs())
+            .sum();
+        for (d_old, &d_new) in density.iter_mut().zip(&new_d) {
+            *d_old = 0.2 * d_new + 0.8 * *d_old;
         }
 
-        // Check convergence.
-        let diff: f32 = new_density
-            .iter()
-            .zip(density.iter())
-            .map(|(a, b)| (a - b).abs())
-            .sum();
         if diff < TOLERANCE {
-            log(format!("Converged in {} iterations.", iter + 1));
-            eigenvalues_result = Some(eigenvalues.as_slice().to_vec());
-            return (density, eigenvalues_result);
+            log(format!("Converged in {} iterations", iter + 1));
+            return (density, Some(eig.eigenvalues.iter().cloned().collect()));
         }
     }
 
-    println!("SCF did not converge.");
+    log("SCF did not converge".to_string());
     (density, None)
 }
 
 pub fn run_scf_command(args: Vec<String>) {
-
     if args.len() != 1 {
-        log("Invalid number of arguments for run_scf_command".to_string());
+        log("Usage: run_scf <config>".into());
         return;
     }
-
-    let config_key = &args[0];
-    let configs = SIMULATION_CONFIGS.lock().unwrap();
-
-    let config = match configs.get(config_key) {
-        Some(cfg) => cfg.clone(),
-        None => {
-            log(format!(
-                "Invalid configuration key '{}'. Available configurations are: {}",
-                config_key,
-                configs.keys().cloned().collect::<Vec<_>>().join(", ")
-            ));
-            return;
-        }
+    let key  = &args[0];
+    let cfgs = SIMULATION_CONFIGS.lock().unwrap();
+    let cfg  = match cfgs.get(key) {
+        Some(c) => c.clone(),
+        None    => { log(format!("Unknown config '{}'", key)); return; }
     };
 
-    log(format!("Starting SCF simulation with config '{}'", config_key));
-
+    log(format!("Running SCF on '{}'", key));
     let mut solver = DFTSolver::new();
-    solver.run_scf(&config);
+    solver.run_scf(&cfg);
 
-    log("Solution found!".to_string());
-    SIMULATION_STATE.lock().unwrap().dft_simulator = solver;
+    *SIMULATION_STATE.lock().unwrap() =SimulationState::new(0.0, solver, SimulationStatus::Completed);
+
+    log("SCF complete".into());
 }

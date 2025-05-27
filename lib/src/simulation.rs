@@ -1,253 +1,198 @@
 use std::{collections::HashMap, sync::Mutex};
 use lazy_static::lazy_static;
-use serde::{Serialize, Deserialize};
 use crate::dft_simulator::DFTSolver;
+
+pub trait BasisFunction: Send + Sync {
+    fn center(&self) -> [f32; 3];
+    fn value(&self, point: &[f32; 3]) -> f32;
+    fn clone_box(&self) -> Box<dyn BasisFunction>;
+}
+
+impl Clone for Box<dyn BasisFunction> {
+    fn clone(&self) -> Box<dyn BasisFunction> {
+        self.clone_box()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GaussianBasis {
+    pub center: [f32; 3],
+    pub alpha:  f32,
+}
+
+impl BasisFunction for GaussianBasis {
+    fn center(&self) -> [f32; 3] {
+        self.center
+    }
+    fn value(&self, point: &[f32; 3]) -> f32 {
+        let dx = point[0] - self.center[0];
+        let dy = point[1] - self.center[1];
+        let dz = point[2] - self.center[2];
+        (-self.alpha * (dx * dx + dy * dy + dz * dz)).exp()
+    }
+    fn clone_box(&self) -> Box<dyn BasisFunction> {
+        Box::new(self.clone())
+    }
+}
 
 lazy_static! {
     pub static ref SIMULATION_STATE: Mutex<SimulationState> = Mutex::new(SimulationState::default());
 
     pub static ref SIMULATION_CONFIGS: Mutex<HashMap<String, SimulationConfig>> = {
         let mut m = HashMap::new();
+
+        // Hydrogen (Gaussian)
         m.insert(
-            "hydrogen".to_string(),
+            "hydrogen".into(),
             SimulationConfig {
-                nuclei: vec![Nucleus {
-                    species: "H".into(),
-                    atomic_number: 1,
-                    coordinates: [0.0, 0.0, 0.0],
-                }],
+                nuclei: vec![Nucleus { species: "H".into(), atomic_number: 1, coordinates: [0.0,0.0,0.0] }],
                 num_electrons: 1,
-                basis: vec![GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0 }],
+                basis: vec![ Box::new(GaussianBasis { center: [0.0,0.0,0.0], alpha: 1.0 }) ],
                 points_per_axis: 32,
-            },
-        );
-        m.insert(
-            "helium".to_string(),
-            SimulationConfig {
-                nuclei: vec![Nucleus {
-                    species: "He".into(),
-                    atomic_number: 2,
-                    coordinates: [0.0, 0.0, 0.0],
-                }],
-                num_electrons: 2,
-                basis: vec![GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.5 }],
-                points_per_axis: 32,
-            },
-        );
-        m.insert(
-            "h2_molecule".to_string(),
-            SimulationConfig {
-                nuclei: vec![
-                    Nucleus {
-                        species: "H".into(),
-                        atomic_number: 1,
-                        coordinates: [-0.37, 0.0, 0.0],
-                    },
-                    Nucleus {
-                        species: "H".into(),
-                        atomic_number: 1,
-                        coordinates: [0.37, 0.0, 0.0],
-                    },
-                ],
-                num_electrons: 2,
-                basis: vec![
-                    GaussianBasis { center: [-0.37, 0.0, 0.0], alpha: 1.0 },
-                    GaussianBasis { center: [0.37, 0.0, 0.0], alpha: 1.0 },
-                ],
-                points_per_axis: 32,
-            },
-        );
-        m.insert(
-            "h2_molecule_low_resolution".to_string(),
-            SimulationConfig {
-                nuclei: vec![
-                    Nucleus {
-                        species: "H".into(),
-                        atomic_number: 1,
-                        coordinates: [-1.0, 0.0, 0.0],
-                    },
-                    Nucleus {
-                        species: "H".into(),
-                        atomic_number: 1,
-                        coordinates: [1.0, 0.0, 0.0],
-                    },
-                ],
-                num_electrons: 2,
-                basis: vec![
-                    GaussianBasis { center: [-0.37, 0.0, 0.0], alpha: 1.0 },
-                    GaussianBasis { center: [0.37, 0.0, 0.0], alpha: 1.0 },
-                ],
-                points_per_axis: 10,
-            },
-        );
-        //EXPERIMENTAL - this is what I'm targeting as a proof of concept for the DFT solver
-        m.insert(
-            "oxygen".to_string(),
-            SimulationConfig {
-            points_per_axis: 32,
-            nuclei: vec![Nucleus {
-                species: "O".into(),
-                atomic_number: 8,
-                coordinates: [0.0, 0.0, 0.0],
-            }],
-            num_electrons: 8,
-            basis: vec![
-                GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0 },
-                GaussianBasis { center: [ 0.5, 0.0, 0.0], alpha: 0.5 },
-                GaussianBasis { center: [-0.5, 0.0, 0.0], alpha: 0.5 },
-                GaussianBasis { center: [0.0,  0.5, 0.0], alpha: 0.5 },
-                GaussianBasis { center: [0.0, -0.5, 0.0], alpha: 0.5 },
-                GaussianBasis { center: [0.0, 0.0,  0.5], alpha: 0.5 },
-                GaussianBasis { center: [0.0, 0.0, -0.5], alpha: 0.5 },
-                
-                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 130.70932 },
-                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 23.808861 },
-                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 6.4436083 },
-                // // Polarization functions
-                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0 }, // d-type function
-                // // Diffuse functions
-                // GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 0.1687144 },
-            ],
-            },
-        );
-        m.insert(
-            "oxygen_low_res".to_string(),
-            SimulationConfig {
-            points_per_axis: 16,
-            nuclei: vec![Nucleus {
-                species: "O".into(),
-                atomic_number: 8,
-                coordinates: [0.0, 0.0, 0.0],
-            }],
-            num_electrons: 8,
-            basis: vec![
-                GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0 },
-                GaussianBasis { center: [ 0.5, 0.0, 0.0], alpha: 0.5 },
-                GaussianBasis { center: [-0.5, 0.0, 0.0], alpha: 0.5 },
-                GaussianBasis { center: [0.0,  0.5, 0.0], alpha: 0.5 },
-                GaussianBasis { center: [0.0, -0.5, 0.0], alpha: 0.5 },
-                GaussianBasis { center: [0.0, 0.0,  0.5], alpha: 0.5 },
-                GaussianBasis { center: [0.0, 0.0, -0.5], alpha: 0.5 },
-            ],
-            },
+            }
         );
 
+        // Helium
+        m.insert(
+            "helium".into(),
+            SimulationConfig {
+                nuclei: vec![Nucleus { species: "He".into(), atomic_number: 2, coordinates: [0.0,0.0,0.0] }],
+                num_electrons: 2,
+                basis: vec![ Box::new(GaussianBasis { center: [0.0,0.0,0.0], alpha: 1.5 }) ],
+                points_per_axis: 32,
+            }
+        );
+
+        // H2 molecule
+        m.insert(
+            "h2_molecule".into(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-0.37,0.0,0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 0.37,0.0,0.0] },
+                ],
+                num_electrons: 2,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [-0.37,0.0,0.0], alpha: 1.0 }),
+                    Box::new(GaussianBasis { center: [ 0.37,0.0,0.0], alpha: 1.0 }),
+                ],
+                points_per_axis: 32,
+            }
+        );
+
+        // H2 low-resolution
+        m.insert(
+            "h2_molecule_low_resolution".into(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-1.0,0.0,0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 1.0,0.0,0.0] },
+                ],
+                num_electrons: 2,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [-0.37,0.0,0.0], alpha: 1.0 }),
+                    Box::new(GaussianBasis { center: [ 0.37,0.0,0.0], alpha: 1.0 }),
+                ],
+                points_per_axis: 10,
+            }
+        );
+
+        // Oxygen
+        m.insert(
+            "oxygen".into(),
+            SimulationConfig {
+                nuclei: vec![Nucleus { species: "O".into(), atomic_number: 8, coordinates: [0.0,0.0,0.0] }],
+                num_electrons: 8,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [0.0,0.0,0.0], alpha: 1.0 }),
+                    Box::new(GaussianBasis { center: [0.5,0.0,0.0], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [-0.5,0.0,0.0], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [0.0,0.5,0.0], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [0.0,-0.5,0.0], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [0.0,0.0,0.5], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [0.0,0.0,-0.5], alpha: 0.5 }),
+                ],
+                points_per_axis: 32,
+            }
+        );
+
+        // Oxygen low-res
+        m.insert(
+            "oxygen_low_res".into(),
+            SimulationConfig {
+                nuclei: vec![Nucleus { species: "O".into(), atomic_number: 8, coordinates: [0.0,0.0,0.0] }],
+                num_electrons: 8,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [0.0,0.0,0.0], alpha: 1.0 }),
+                    Box::new(GaussianBasis { center: [0.5,0.0,0.0], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [-0.5,0.0,0.0], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [0.0,0.5,0.0], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [0.0,-0.5,0.0], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [0.0,0.0,0.5], alpha: 0.5 }),
+                    Box::new(GaussianBasis { center: [0.0,0.0,-0.5], alpha: 0.5 }),
+                ],
+                points_per_axis: 16,
+            }
+        );
 
         Mutex::new(m)
     };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum SimulationStatus {
     Running,
     Completed,
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Nucleus {
     pub species: String,
     pub atomic_number: u32,
     pub coordinates: [f64; 3],
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct SimulationState {
-    pub total_time: f64,                  // Total simulation time in a.u. (irrelevant for now)
-    pub status: SimulationStatus,         // Status of the simulation
-    pub dft_simulator: DFTSolver,         // DFT solver instance
-    pub file_context: Option<String>,     // Can be written to as if it were a file (this can be handled separately) LATER
+    pub total_time: f64,
+    pub status: SimulationStatus,
+    pub dft_simulator: DFTSolver,
+    pub file_context: Option<String>,
 }
 
 impl SimulationState {
-    pub fn new(
-        total_time: f64,
-        dft_simulator: DFTSolver,
-        status: SimulationStatus,
-    ) -> Self {
-        let state = SimulationState {
-            total_time,
-            status,
-            dft_simulator,
-            file_context: None,
-        };
-
-        {
-            let mut global_state = SIMULATION_STATE.lock().unwrap();
-            *global_state = state.clone();
-        }
-
+    pub fn new(total_time: f64, dft_simulator: DFTSolver, status: SimulationStatus) -> Self {
+        let state = SimulationState { total_time, status, dft_simulator, file_context: None };
+        *SIMULATION_STATE.lock().unwrap() = state.clone();
         state
     }
-
-    pub fn save_to_file_context(&mut self) -> Result<(), serde_json::Error> {
-        let serialized = serde_json::to_string(self)?;
-        self.file_context = Some(serialized);
-        Ok(())
-    }
-
-    pub fn load_from_file_context(file_context: String) -> Result<Self, serde_json::Error> {
-        let state: SimulationState = serde_json::from_str(&file_context)?;
-        Ok(state)
-    }
-
     pub fn print_summary(&self) -> String {
-        let summary = format!(
-            "Simulation State:\n  Total Time: {:.3} a.u.\n  Status: {:?}\n",
-            self.total_time,
-            self.status,
-        );
-        summary
+        format!("Simulation State:\n  Total Time: {:.3} a.u.\n  Status: {:?}\n", self.total_time, self.status)
     }
 }
 
 impl Default for SimulationState {
     fn default() -> Self {
-        SimulationState {
-            total_time: 1.0,
-            status: SimulationStatus::Completed,
-            dft_simulator: DFTSolver::new(),
-            file_context: None,
-        }
+        SimulationState { total_time: 1.0, status: SimulationStatus::Completed, dft_simulator: DFTSolver::new(), file_context: None }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GaussianBasis {
-    pub center: [f32; 3],
-    pub alpha:  f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct SimulationConfig {
     pub points_per_axis: usize,
     pub nuclei: Vec<Nucleus>,
     pub num_electrons: usize,
-    pub basis: Vec<GaussianBasis>,
-}
-
-impl SimulationConfig {
-    pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
-    }
-    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json_str)
-    }
+    pub basis: Vec<Box<dyn BasisFunction>>,
 }
 
 impl Default for SimulationConfig {
     fn default() -> Self {
         SimulationConfig {
             points_per_axis: 32,
-            nuclei: vec![Nucleus {
-                species: "H".into(),
-                atomic_number: 1,
-                coordinates: [0.0, 0.0, 0.0],
-            }],
+            nuclei: vec![Nucleus { species: "H".into(), atomic_number: 1, coordinates: [0.0,0.0,0.0] }],
             num_electrons: 1,
-            basis: vec![ GaussianBasis { center: [0.0,0.0,0.0], alpha: 1.0 } ],
+            basis: vec![ Box::new(GaussianBasis { center: [0.0,0.0,0.0], alpha: 1.0 }) ],
         }
     }
 }
-
-
