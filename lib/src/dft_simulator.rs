@@ -212,7 +212,8 @@ fn build_full_hamiltonian(
 ) -> DMatrix<f32> {
     let n = basis.len();
     let n_grid = grid.len();
-    let dv = 1.0 / n_grid as f32;
+    // let dv = 1.0 / n_grid as f32;
+    let dv = 1.0 as f32 / (n_grid as f32).powi(3);
     let v_h = compute_hartree_potential_fft(density, (n_grid as f32).cbrt() as usize);
 
     let mut H = DMatrix::<f32>::zeros(n, n);
@@ -333,14 +334,23 @@ fn scf_loop(
 
 pub fn run_scf_command(args: Vec<String>) {
     if args.len() != 1 {
-        log("Usage: run_scf <config>".into());
+        log("Usage: run_dft <config>".into());
         return;
     }
     let key  = &args[0];
     let cfgs = SIMULATION_CONFIGS.lock().unwrap();
     let cfg  = match cfgs.get(key) {
         Some(c) => c.clone(),
-        None    => { log(format!("Unknown config '{}'", key)); return; }
+        None    => {
+                log(format!("Unknown config '{}'", key));
+                if !cfgs.is_empty() {
+                    log(format!(
+                        "Available configs: {}",
+                        cfgs.keys().cloned().collect::<Vec<_>>().join(", ")
+                    ));
+                }
+                return;
+            }
     };
 
     log(format!("Running SCF on '{}'", key));

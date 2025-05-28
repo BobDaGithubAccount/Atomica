@@ -2,6 +2,10 @@ use std::{collections::HashMap, sync::Mutex};
 use lazy_static::lazy_static;
 use crate::dft_simulator::DFTSolver;
 
+////////////////////////////////////////////////////////////////////////
+/// Basis functions
+////////////////////////////////////////////////////////////////////////
+
 pub trait BasisFunction: Send + Sync {
     fn center(&self) -> [f32; 3];
     fn value(&self, point: &[f32; 3]) -> f32;
@@ -34,6 +38,55 @@ impl BasisFunction for GaussianBasis {
         Box::new(self.clone())
     }
 }
+
+/// A Slater-type orbital:  ψ(r) ∝ r^(n−1) e^(−ζ r)
+#[derive(Debug, Clone)]
+pub struct SlaterBasis {
+    pub center: [f32; 3],
+    pub zeta:   f32,
+    pub n:      usize,
+}
+
+impl BasisFunction for SlaterBasis {
+    fn center(&self) -> [f32;3] { self.center }
+    fn value(&self, point: &[f32;3]) -> f32 {
+        let dx = point[0] - self.center[0];
+        let dy = point[1] - self.center[1];
+        let dz = point[2] - self.center[2];
+        let r = (dx*dx + dy*dy + dz*dz).sqrt();
+        // r^(n-1) * exp(-ζ r)
+        r.powi((self.n-1) as i32) * (-self.zeta * r).exp()
+    }
+    fn clone_box(&self) -> Box<dyn BasisFunction> {
+        Box::new(self.clone())
+    }
+}
+
+/// A Cartesian Gaussian of arbitrary angular momentum (lx,ly,lz).
+#[derive(Debug, Clone)]
+pub struct AngularGaussian {
+    pub center: [f32;3],
+    pub alpha:  f32,
+    pub l:      (usize, usize, usize),
+}
+
+impl BasisFunction for AngularGaussian {
+    fn center(&self) -> [f32;3] { self.center }
+    fn value(&self, point: &[f32;3]) -> f32 {
+        let (lx, ly, lz) = self.l;
+        let dx = point[0] - self.center[0];
+        let dy = point[1] - self.center[1];
+        let dz = point[2] - self.center[2];
+        let r2 = dx*dx + dy*dy + dz*dz;
+        let norm = (2.0 * self.alpha / std::f32::consts::PI).powf(0.75);
+        norm * dx.powi(lx as i32) * dy.powi(ly as i32) * dz.powi(lz as i32) * (-self.alpha * r2).exp()
+    }
+    fn clone_box(&self) -> Box<dyn BasisFunction> {
+        Box::new(self.clone())
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
 
 lazy_static! {
     pub static ref SIMULATION_STATE: Mutex<SimulationState> = Mutex::new(SimulationState::default());
@@ -116,24 +169,58 @@ lazy_static! {
             }
         );
 
-        // Oxygen low-res
-        m.insert(
-            "oxygen_low_res".into(),
-            SimulationConfig {
-                nuclei: vec![Nucleus { species: "O".into(), atomic_number: 8, coordinates: [0.0,0.0,0.0] }],
-                num_electrons: 8,
-                basis: vec![
-                    Box::new(GaussianBasis { center: [0.0,0.0,0.0], alpha: 1.0 }),
-                    Box::new(GaussianBasis { center: [0.5,0.0,0.0], alpha: 0.5 }),
-                    Box::new(GaussianBasis { center: [-0.5,0.0,0.0], alpha: 0.5 }),
-                    Box::new(GaussianBasis { center: [0.0,0.5,0.0], alpha: 0.5 }),
-                    Box::new(GaussianBasis { center: [0.0,-0.5,0.0], alpha: 0.5 }),
-                    Box::new(GaussianBasis { center: [0.0,0.0,0.5], alpha: 0.5 }),
-                    Box::new(GaussianBasis { center: [0.0,0.0,-0.5], alpha: 0.5 }),
-                ],
-                points_per_axis: 16,
-            }
-        );
+        m.insert("oxygen_low_res".into(), SimulationConfig {
+            points_per_axis: 32,
+            nuclei: vec![ Nucleus {
+            species: "O".into(),
+            atomic_number: 8,
+            coordinates: [0.0,0.0,0.0],
+            } ],
+            num_electrons: 8,
+            basis: vec![
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 130.070932 / 8.0, l: (0,0,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 23.808861 / 8.0, l: (0,0,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 6.4436083 / 8.0,  l: (0,0,0) }),
+
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 8.0, l: (1,0,0) }), 
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 8.0, l: (0,1,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 8.0, l: (0,0,1) }),
+
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.1687144 / 8.0, l: (0,0,0) }),
+
+            //optional
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 8.0, l: (2,0,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 8.0, l: (0,2,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 8.0, l: (0,0,2) }),
+            ],
+        });
+
+
+        m.insert("oxygen_advanced".into(), SimulationConfig {
+            points_per_axis: 64,
+            nuclei: vec![ Nucleus {
+                species: "O".into(),
+                atomic_number: 8,
+                coordinates: [0.0,0.0,0.0],
+            } ],
+            num_electrons: 8,
+            basis: vec![
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 130.070932 / 2.0, l: (0,0,0) }),
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 23.808861 / 2.0, l: (0,0,0) }),
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 6.4436083 / 2.0,  l: (0,0,0) }),
+
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 2.0, l: (1,0,0) }), 
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 2.0, l: (0,1,0) }),
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 2.0, l: (0,0,1) }),
+
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.1687144 / 2.0, l: (0,0,0) }),
+
+                //optional
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 2.0, l: (2,0,0) }),
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 2.0, l: (0,2,0) }),
+                Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 2.0, l: (0,0,2) }),
+            ],
+        });
 
         Mutex::new(m)
     };
