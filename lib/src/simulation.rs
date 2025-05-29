@@ -170,7 +170,7 @@ lazy_static! {
         );
 
         m.insert("oxygen_low_res".into(), SimulationConfig {
-            points_per_axis: 32,
+            points_per_axis: 20,
             nuclei: vec![ Nucleus {
             species: "O".into(),
             atomic_number: 8,
@@ -178,20 +178,20 @@ lazy_static! {
             } ],
             num_electrons: 8,
             basis: vec![
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 130.070932 / 8.0, l: (0,0,0) }),
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 23.808861 / 8.0, l: (0,0,0) }),
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 6.4436083 / 8.0,  l: (0,0,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 130.070932 / 12.0, l: (0,0,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 23.808861 / 12.0, l: (0,0,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 6.4436083 / 12.0,  l: (0,0,0) }),
 
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 8.0, l: (1,0,0) }), 
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 8.0, l: (0,1,0) }),
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 8.0, l: (0,0,1) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 12.0, l: (1,0,0) }), 
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 12.0, l: (0,1,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 1.1 / 12.0, l: (0,0,1) }),
 
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.1687144 / 8.0, l: (0,0,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.1687144 / 12.0, l: (0,0,0) }),
 
             //optional
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 8.0, l: (2,0,0) }),
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 8.0, l: (0,2,0) }),
-            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 8.0, l: (0,0,2) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 12.0, l: (2,0,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 12.0, l: (0,2,0) }),
+            Box::new(AngularGaussian { center: [0.0,0.0,0.0], alpha: 0.25 / 12.0, l: (0,0,2) }),
             ],
         });
 

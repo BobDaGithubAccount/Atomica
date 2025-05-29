@@ -77,7 +77,7 @@ fn build_overlap_matrix(
     basis: &[Box<dyn BasisFunction>],
 ) -> DMatrix<f32> {
     let n = basis.len();
-    let mut S = DMatrix::<f32>::zeros(n, n);
+    let mut s = DMatrix::<f32>::zeros(n, n);
 
     for i in 0..n {
         for j in 0..n {
@@ -85,11 +85,11 @@ fn build_overlap_matrix(
             for &pt in grid {
                 sum += basis[i].value(&pt) * basis[j].value(&pt);
             }
-            S[(i, j)] = sum;
+            s[(i, j)] = sum;
         }
     }
 
-    S
+    s
 }
 
 ///// Poisson solver for the electron density. (FFT scaling instead of O(N^2) for large systems)
@@ -216,7 +216,7 @@ fn build_full_hamiltonian(
     let dv = 1.0 as f32 / (n_grid as f32).powi(3);
     let v_h = compute_hartree_potential_fft(density, (n_grid as f32).cbrt() as usize);
 
-    let mut H = DMatrix::<f32>::zeros(n, n);
+    let mut h = DMatrix::<f32>::zeros(n, n);
     for i in 0..n {
         for j in 0..n {
             let mut hij = 0.0;
@@ -240,11 +240,11 @@ fn build_full_hamiltonian(
 
                 hij += (φi * (v_nuc + v_h[k] + v_xc) * φj) * dv;
             }
-            H[(i,j)] = hij;
+            h[(i,j)] = hij;
         }
     }
 
-    H
+    h
 }
 
 /////
@@ -256,9 +256,12 @@ fn update_density(
     basis: &[Box<dyn BasisFunction>],
     num_electrons: usize,
 ) -> Vec<f32> {
-    let n_grid = grid.len();
+    let n_grid = grid.len() as f32;
+    let box_length = 20.0_f32;
+    let vol        = box_length.powi(3);
+    let dv         = vol / n_grid;
     let n_occ  = num_electrons.min(eigenvectors.ncols());
-    let mut density = vec![0.0; n_grid];
+    let mut density = vec![0.0; n_grid as usize];
 
     for (k, &pt) in grid.iter().enumerate() {
         let mut ρ_sum = 0.0;
@@ -272,14 +275,17 @@ fn update_density(
         density[k] = ρ_sum;
     }
 
-    // normalize to N electrons
-    let total: f32 = density.iter().sum();
-    if total > 0.0 {
+    // Drift correction: normalize the density to match the number of electrons
+    // This is a simple linear scaling to ensure the total density matches num_electrons.
+    let total_raw: f32 = density.iter().sum();
+    let physical_total = total_raw * dv;
+    let n_e = num_electrons as f32;
+    if physical_total > 1e-12 {
+        let scale = n_e / physical_total;
         for d in &mut density {
-            *d /= total;
+            *d *= scale;
         }
     }
-
     density
 }
 
@@ -296,22 +302,40 @@ fn scf_loop(
     atomic_centers: &[[f32;3]],
     atomic_charges: &[f32],
 ) -> (Vec<f32>, Option<Vec<f32>>) {
-    let mut density = vec![1.0 / (grid.len() as f32); grid.len()];
+    let mut density = vec![num_electrons as f32 / (grid.len() as f32); grid.len()];
 
     for iter in 0..MAX_ITERATIONS {
         log(format!("SCF iteration {}", iter + 1));
 
-        let H = build_full_hamiltonian(grid, basis, atomic_centers, atomic_charges, &density);
-        let S = build_overlap_matrix(grid, basis);
+        // Resonance changes (enforcing neutrality)
+            let box_length = 20.0_f32;
+            let vol        = box_length.powi(3);
+            let dv         = vol / (grid.len() as f32);
+
+            let n_e: f32  = density.iter().map(|&ρ| ρ * dv).sum();
+            let z:   f32  = atomic_charges.iter().sum();
+            let rho_bg    = (n_e - z) / vol;
+            let mut neutral_density = Vec::with_capacity(density.len());
+            for &value in &density {
+                neutral_density.push(value - rho_bg);
+            }
+            log(format!(
+                " SCF iter {}: N_e={:.6}, Z={:.6}, ρ_bg={:.3e}",
+                iter+1, n_e, z, rho_bg
+            ));
+        //
+
+        let h = build_full_hamiltonian(grid, basis, atomic_centers, atomic_charges, &density);
+        let s = build_overlap_matrix(grid, basis);
 
         // generalized eigenproblem H C = S C ε
-        let L    = S.clone().cholesky().expect("Overlap not PD").l();
-        let Linv = L.clone().try_inverse().unwrap();
-        let Ht   = &Linv * &H * &Linv.transpose();
-        let eig  = Ht.symmetric_eigen();
-        let C    = Linv.transpose() * eig.eigenvectors;
+        let l    = s.clone().cholesky().expect("Overlap not PD").l();
+        let linv = l.clone().try_inverse().unwrap();
+        let ht   = &linv * &h * &linv.transpose();
+        let eig  = ht.symmetric_eigen();
+        let c    = linv.transpose() * eig.eigenvectors;
 
-        let new_d = update_density(grid, &C, basis, num_electrons);
+        let new_d = update_density(grid, &c, basis, num_electrons);
 
         // simple linear mixing
         let diff: f32 = new_d.iter()
