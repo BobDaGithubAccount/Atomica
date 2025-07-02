@@ -143,7 +143,8 @@ impl BasisFunction for AngularGaussian {
         let df_z = double_factorial(2 * lz as isize - 1);
 
         // Proper Cartesian‐Gaussian denominator under a square root:
-        let denom_sqrt = (df_x * df_y * df_z).sqrt().max(1.0);
+//        let denom_sqrt = (df_x * df_y * df_z).sqrt().max(1.0);
+        let denom_sqrt = (df_x * df_y * df_z).sqrt();
 
         let lsum = (lx + ly + lz) as f32;
 
