@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::simulation::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 
-const TOLERANCE: f32 = 1e-3;
+const TOLERANCE: f32 = 1e-1;
 const MAX_ITERATIONS: usize = 1000;
 
 // Exchange–correlation constant for the electron gas (LDA, exchange only).
@@ -93,132 +93,303 @@ fn build_overlap_matrix(
 }
 
 /// Poisson solver for the electron density via FFT (periodic boundary conditions).
+// fn compute_hartree_potential_fft(
+//     density: &[f32],
+//     points_per_axis: usize,
+// ) -> Vec<f32> {
+//     let n = points_per_axis;
+//     let n_grid = n * n * n;
+
+//     if density.len() != n_grid {
+//         panic!("Density length {} does not match grid size {}", density.len(), n_grid);
+//     }
+
+//     // Physical box length
+//     let l = BOX_LENGTH;
+//     // Grid spacing
+//     let n_f = n as f32;
+//     let delta = BOX_LENGTH / (n_f - 1.0);
+//     log(format!("Computing Hartree potential on {}³ grid with delta = {}", n, delta));
+
+//     // 1) pack density into complex array for FFT
+//     let mut data: Vec<Complex<f32>> = density
+//         .iter()
+//         .map(|&r| Complex::new(r, 0.0))
+//         .collect();
+
+//     // 2) forward 3D FFT (n² row‐FFTs on each axis)
+//     let mut planner = FftPlanner::<f32>::new();
+//     let fft = planner.plan_fft_forward(n);
+//     let ifft = planner.plan_fft_inverse(n);
+
+//     // helper to index (i,j,k) -> flat
+//     let idx = |i, j, k| (i * n + j) * n + k;
+
+//     // FFT along k
+//     for i in 0..n {
+//         for j in 0..n {
+//             let mut row: Vec<_> = (0..n).map(|k| data[idx(i, j, k)]).collect();
+//             fft.process(&mut row);
+//             for k in 0..n { data[idx(i, j, k)] = row[k]; }
+//         }
+//     }
+//     // FFT along j
+//     for i in 0..n {
+//         for k in 0..n {
+//             let mut row: Vec<_> = (0..n).map(|j| data[idx(i, j, k)]).collect();
+//             fft.process(&mut row);
+//             for j in 0..n { data[idx(i, j, k)] = row[j]; }
+//         }
+//     }
+//     // FFT along i
+//     for j in 0..n {
+//         for k in 0..n {
+//             let mut row: Vec<_> = (0..n).map(|i| data[idx(i, j, k)]).collect();
+//             fft.process(&mut row);
+//             for i in 0..n { data[idx(i, j, k)] = row[i]; }
+//         }
+//     }
+
+//     // 3) Solve Poisson in k‐space: V(k) = 4π ρ(k) / k², with k = 2π·m/L
+//     for i in 0..n {
+//         let ki = if i <= n / 2 { i as f32 } else { (i as f32) - (n as f32) };
+//         let kx = 2.0 * std::f32::consts::PI * ki / l;
+//         for j in 0..n {
+//             let kj = if j <= n / 2 { j as f32 } else { (j as f32) - (n as f32) };
+//             let ky = 2.0 * std::f32::consts::PI * kj / l;
+//             for k in 0..n {
+//                 let kk = if k <= n / 2 { k as f32 } else { (k as f32) - (n as f32) };
+//                 let kz = 2.0 * std::f32::consts::PI * kk / l;
+
+//                 let k2 = kx * kx + ky * ky + kz * kz;
+//                 let index = idx(i, j, k);
+//                 if k2.abs() < 1e-12 {
+//                     data[index] = Complex::new(0.0, 0.0); // zero‐mode
+//                 } else {
+//                     data[index] *= Complex::new(4.0 * std::f32::consts::PI / k2, 0.0);
+//                 }
+//             }
+//         }
+//     }
+
+//     // 4) inverse 3D FFT
+//     // along i
+//     for j in 0..n {
+//         for k in 0..n {
+//             let mut row: Vec<_> = (0..n).map(|i| data[idx(i, j, k)]).collect();
+//             ifft.process(&mut row);
+//             for i in 0..n { data[idx(i, j, k)] = row[i]; }
+//         }
+//     }
+//     // along j
+//     for i in 0..n {
+//         for k in 0..n {
+//             let mut row: Vec<_> = (0..n).map(|j| data[idx(i, j, k)]).collect();
+//             ifft.process(&mut row);
+//             for j in 0..n { data[idx(i, j, k)] = row[j]; }
+//         }
+//     }
+//     // along k
+//     for i in 0..n {
+//         for j in 0..n {
+//             let mut row: Vec<_> = (0..n).map(|k| data[idx(i, j, k)]).collect();
+//             ifft.process(&mut row);
+//             for k in 0..n { data[idx(i, j, k)] = row[k]; }
+//         }
+//     }
+
+//     let mut v = data
+//     .into_iter()
+//     .map(|c| c.re / (n_grid as f32))
+//     .collect::<Vec<f32>>();
+
+//     // Enforce Dirichlet BC: V = 0 on any boundary face (this will be coupled with DST)
+//     let n = points_per_axis;
+//     let idx = |i, j, k| (i * n + j) * n + k;
+//     for i in 0..n {
+//         for j in 0..n {
+//             v[idx(0,    i, j)] = 0.0;
+//             v[idx(n-1,  i, j)] = 0.0;
+//             v[idx(i,  0,   j)] = 0.0;
+//             v[idx(i, n-1, j)] = 0.0;
+//             v[idx(i,  j,   0)] = 0.0;
+//             v[idx(i,  j, n-1)] = 0.0;
+//         }
+//     }
+
+//     v
+// }
+
+/// Poisson solver via FFT + erfc/k-space split (PME style).
+/// Real‐space part now uses open boundaries (no wrap), so outside‐box = zero. 
+
+use statrs::function::erf::erf;
+
 fn compute_hartree_potential_fft(
     density: &[f32],
     points_per_axis: usize,
 ) -> Vec<f32> {
     let n = points_per_axis;
     let n_grid = n * n * n;
+    assert_eq!(
+        density.len(), n_grid,
+        "Density length {} != grid size {}³",
+        density.len(), n
+    );
 
-    if density.len() != n_grid {
-        panic!("Density length {} does not match grid size {}", density.len(), n_grid);
-    }
-
-    // Physical box length
     let l = BOX_LENGTH;
-    // Grid spacing
-    let n_f = n as f32;
-    let delta = BOX_LENGTH / (n_f - 1.0);
-    log(format!("Computing Hartree potential on {}³ grid with delta = {}", n, delta));
+    let delta = l / (n as f32 - 1.0);
+    let dv = delta.powi(3);
+    log(format!("PME‐FFT Poisson: grid {}³, Δ={}", n, delta));
 
-    // 1) pack density into complex array for FFT
-    let mut data: Vec<Complex<f32>> = density
-        .iter()
-        .map(|&r| Complex::new(r, 0.0))
-        .collect();
+    // 1) choose screening and cutoff
+    let alpha = 3.0 / delta;       // splits at ~3 cells
+    let r_cut = 4.0 * delta;       // real‐space cutoff
+    let r_cut2 = r_cut * r_cut;
 
-    // 2) forward 3D FFT (n² row‐FFTs on each axis)
-    let mut planner = FftPlanner::<f32>::new();
-    let fft = planner.plan_fft_forward(n);
-    let ifft = planner.plan_fft_inverse(n);
-
-    // helper to index (i,j,k) -> flat
-    let idx = |i, j, k| (i * n + j) * n + k;
-
-    // FFT along k
-    for i in 0..n {
-        for j in 0..n {
-            let mut row: Vec<_> = (0..n).map(|k| data[idx(i, j, k)]).collect();
-            fft.process(&mut row);
-            for k in 0..n { data[idx(i, j, k)] = row[k]; }
-        }
-    }
-    // FFT along j
-    for i in 0..n {
-        for k in 0..n {
-            let mut row: Vec<_> = (0..n).map(|j| data[idx(i, j, k)]).collect();
-            fft.process(&mut row);
-            for j in 0..n { data[idx(i, j, k)] = row[j]; }
-        }
-    }
-    // FFT along i
-    for j in 0..n {
-        for k in 0..n {
-            let mut row: Vec<_> = (0..n).map(|i| data[idx(i, j, k)]).collect();
-            fft.process(&mut row);
-            for i in 0..n { data[idx(i, j, k)] = row[i]; }
-        }
-    }
-
-    // 3) Solve Poisson in k‐space: V(k) = 4π ρ(k) / k², with k = 2π·m/L
-    for i in 0..n {
-        let ki = if i <= n / 2 { i as f32 } else { (i as f32) - (n as f32) };
-        let kx = 2.0 * std::f32::consts::PI * ki / l;
-        for j in 0..n {
-            let kj = if j <= n / 2 { j as f32 } else { (j as f32) - (n as f32) };
-            let ky = 2.0 * std::f32::consts::PI * kj / l;
-            for k in 0..n {
-                let kk = if k <= n / 2 { k as f32 } else { (k as f32) - (n as f32) };
-                let kz = 2.0 * std::f32::consts::PI * kk / l;
-
-                let k2 = kx * kx + ky * ky + kz * kz;
-                let index = idx(i, j, k);
-                if k2.abs() < 1e-12 {
-                    data[index] = Complex::new(0.0, 0.0); // zero‐mode
-                } else {
-                    data[index] *= Complex::new(4.0 * std::f32::consts::PI / k2, 0.0);
+    // 2) gather neighbor offsets within cutoff
+    let max_i = (r_cut / delta).ceil() as isize;
+    let mut neighbor_offsets = Vec::new();
+    for dx in -max_i..=max_i {
+        for dy in -max_i..=max_i {
+            for dz in -max_i..=max_i {
+                let r2 = (dx as f32).powi(2)
+                       + (dy as f32).powi(2)
+                       + (dz as f32).powi(2);
+                if r2 > 0.0 && r2 * delta * delta <= r_cut2 {
+                    neighbor_offsets.push((dx, dy, dz, r2));
                 }
             }
         }
     }
 
-    // 4) inverse 3D FFT
-    // along i
+    // 3) open‐boundary real‐space erfc sum → v_short
+    let mut v_short = vec![0.0f32; n_grid];
+    // index returns None if outside box
+    let idx_opt = |x: isize, y: isize, z: isize| {
+        if x < 0 || x >= n as isize ||
+           y < 0 || y >= n as isize ||
+           z < 0 || z >= n as isize {
+            None
+        } else {
+            Some(((x as usize * n + y as usize) * n + z as usize))
+        }
+    };
+    for ix in 0..n as isize {
+        for iy in 0..n as isize {
+            for iz in 0..n as isize {
+                let center_idx = ((ix as usize * n + iy as usize) * n + iz as usize);
+                let mut sum = 0.0f32;
+                for &(dx, dy, dz, r2) in &neighbor_offsets {
+                    if let Some(j) = idx_opt(ix + dx, iy + dy, iz + dz) {
+                        let r = r2.sqrt() * delta;
+                        sum += density[j] * (erf((alpha * r) as f64) / (r as f64)) as f32;
+                    }
+                }
+                v_short[center_idx] = sum * dv;
+            }
+        }
+    }
+
+    // 4) pack density for FFT long‐range
+    let mut data: Vec<Complex<f32>> = density
+        .iter()
+        .map(|&ρ| Complex::new(ρ, 0.0))
+        .collect();
+
+    // 5) FFT plans
+    let mut planner = FftPlanner::<f32>::new();
+    let fft = planner.plan_fft_forward(n);
+    let ifft = planner.plan_fft_inverse(n);
+
+    let idx3 = |i, j, k| ((i * n + j) * n + k) as usize;
+
+    // 6) forward 3D FFT (axes k, j, i)
+    for i in 0..n {
+        for j in 0..n {
+            let mut row = (0..n).map(|k| data[idx3(i,j,k)]).collect::<Vec<_>>();
+            fft.process(&mut row);
+            for k in 0..n { data[idx3(i,j,k)] = row[k]; }
+        }
+    }
+    for i in 0..n {
+        for k in 0..n {
+            let mut row = (0..n).map(|j| data[idx3(i,j,k)]).collect::<Vec<_>>();
+            fft.process(&mut row);
+            for j in 0..n { data[idx3(i,j,k)] = row[j]; }
+        }
+    }
     for j in 0..n {
         for k in 0..n {
-            let mut row: Vec<_> = (0..n).map(|i| data[idx(i, j, k)]).collect();
-            ifft.process(&mut row);
-            for i in 0..n { data[idx(i, j, k)] = row[i]; }
+            let mut row = (0..n).map(|i| data[idx3(i,j,k)]).collect::<Vec<_>>();
+            fft.process(&mut row);
+            for i in 0..n { data[idx3(i,j,k)] = row[i]; }
         }
     }
-    // along j
+
+    // 7) apply screened Green's function in k‐space
+    let four_pi = 4.0 * std::f32::consts::PI;
+    for i in 0..n {
+        let ki = if i <= n/2 { i as f32 } else { i as f32 - n as f32 };
+        let kx = two_pi() * ki / l;
+        for j in 0..n {
+            let kj = if j <= n/2 { j as f32 } else { j as f32 - n as f32 };
+            let ky = two_pi() * kj / l;
+            for k in 0..n {
+                let kk = if k <= n/2 { k as f32 } else { k as f32 - n as f32 };
+                let kz = two_pi() * kk / l;
+                let k2 = kx*kx + ky*ky + kz*kz;
+                let gk = if k2 > 1e-12 {
+                    four_pi / k2 * (-k2 / (4.0*alpha*alpha)).exp()
+                } else {
+                    0.0
+                };
+                let idx = idx3(i,j,k);
+                data[idx] *= Complex::new(gk, 0.0);
+            }
+        }
+    }
+
+    // 8) inverse 3D FFT (axes i, j, k)
+    for j in 0..n {
+        for k in 0..n {
+            let mut row = (0..n).map(|i| data[idx3(i,j,k)]).collect::<Vec<_>>();
+            ifft.process(&mut row);
+            for i in 0..n { data[idx3(i,j,k)] = row[i]; }
+        }
+    }
     for i in 0..n {
         for k in 0..n {
-            let mut row: Vec<_> = (0..n).map(|j| data[idx(i, j, k)]).collect();
+            let mut row = (0..n).map(|j| data[idx3(i,j,k)]).collect::<Vec<_>>();
             ifft.process(&mut row);
-            for j in 0..n { data[idx(i, j, k)] = row[j]; }
+            for j in 0..n { data[idx3(i,j,k)] = row[j]; }
         }
     }
-    // along k
     for i in 0..n {
         for j in 0..n {
-            let mut row: Vec<_> = (0..n).map(|k| data[idx(i, j, k)]).collect();
+            let mut row = (0..n).map(|k| data[idx3(i,j,k)]).collect::<Vec<_>>();
             ifft.process(&mut row);
-            for k in 0..n { data[idx(i, j, k)] = row[k]; }
+            for k in 0..n { data[idx3(i,j,k)] = row[k]; }
         }
     }
 
-    let mut v = data
-    .into_iter()
-    .map(|c| c.re / (n_grid as f32))
-    .collect::<Vec<f32>>();
-
-    // Enforce Dirichlet BC: V = 0 on any boundary face (this will be coupled with DST)
-    let n = points_per_axis;
-    let idx = |i, j, k| (i * n + j) * n + k;
-    for i in 0..n {
-        for j in 0..n {
-            v[idx(0,    i, j)] = 0.0;
-            v[idx(n-1,  i, j)] = 0.0;
-            v[idx(i,  0,   j)] = 0.0;
-            v[idx(i, n-1, j)] = 0.0;
-            v[idx(i,  j,   0)] = 0.0;
-            v[idx(i,  j, n-1)] = 0.0;
-        }
+    // 9) normalize and combine
+    let inv_n3 = 1.0 / (n_grid as f32);
+    let mut v_long = data.into_iter().map(|c| c.re * inv_n3).collect::<Vec<_>>();
+    for i in 0..n_grid {
+        v_long[i] += v_short[i];
     }
 
-    v
+    v_long
 }
+
+// two_pi helper
+#[inline(always)]
+fn two_pi() -> f32 {
+    std::f32::consts::PI * 2.0
+}
+
+
 
 fn build_full_hamiltonian(
     grid: &[[f32; 3]],
@@ -366,6 +537,8 @@ fn scf_loop(
             diff += (d_new - *d_old).abs();
             *d_old = alpha * d_new + (1.0 - alpha) * *d_old;
         }
+
+        log(String::from(format!(" SCF iter {}: Density updated, diff={:.3e}", iter + 1, diff)));
 
         // 6) Check for convergence
         if diff < TOLERANCE {
