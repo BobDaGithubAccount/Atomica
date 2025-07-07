@@ -1,0 +1,418 @@
+commit 5a21390ac60cbe3516530891d376da71f898e6c8
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Mon Jul 7 13:59:55 2025 +0100
+
+    Note for the log
+    
+    Due to using a misconfiguring of my git global config despite having a concordant GPG access token, the commits diverge in authorship. Hence, breakdowns by contributor with yield interesting results. These can be safely ignore due to me acting as the sole developer (thus far? :D)
+
+commit 6443ff0a6f19253036db32fbccebabe6e7604c99
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Wed Jul 2 18:49:35 2025 +0100
+
+    Pushing changes (working on PME style poisson solver)
+
+commit 3120af7336c60c50219f7007bcae28ed7bef31c3
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Wed Jul 2 16:30:19 2025 +0100
+
+    Pushing changes
+
+commit f5e82eb89946ac0db4d79f8816e4ac9ae6b04812
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Tue Jun 3 21:36:32 2025 +0100
+
+    Partial progress towards working p orbitals (new normalisation scheme for angular momentum and other changes - ignore latex -> unicode as this is unique to my current IDE which I might not continue to use (also there isn't an ability to comment in a description so deal with the long commit name :D)
+
+commit cc1111b112b7dde522ce0de729ee4501e06f0b74
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Thu May 29 15:41:40 2025 +0100
+
+    Removed all formatting warnings and worked towards resolving convergence issues (working theory is that it's a periodic boundary conditions inducing resonance issue)
+
+commit a9b0a6fb93f237210689b3757f0537fd564d7d68
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Wed May 28 11:30:38 2025 +0100
+
+    Progress towards p orbital capable basis set
+
+commit 6f9b594a495aeb097ca6edcfdecd6c77e043894e
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Tue May 27 19:48:18 2025 +0100
+
+    Structural basis set handling changes (now generalisable)
+
+commit 50fc91c7ff2f83946b06b9df31b535884a55baab
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Sun May 25 16:59:58 2025 +0100
+
+    Progress (need to work on basis sets for accurate simulations)
+
+commit 87f09853cd73c043066a35b098e91f81133bb739
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Sat May 24 17:19:41 2025 +0100
+
+    Partially completed "fixed" solver, with overhauled solver (just refactored). Configuration streamlined (future JSON and web storage planned for assets)
+
+commit 68d71c08ce893ba017365f84db2e46cb04797d4e
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Sat May 24 16:59:38 2025 +0100
+
+    Made changes towards allowing for arbitary configuration
+
+commit 442d2a9b9a72cdd7285dd56260c082585219d682
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Sat May 24 15:54:19 2025 +0100
+
+    Refactorings
+
+commit e70fdf2cac730c0a40f8a34a4d6c543517aca4e0
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Sat May 24 15:51:44 2025 +0100
+
+    Transformed solver to use generalised eigenproblem, not symmetric eigen problem
+
+commit 67e13b8c4192bad1e618a1d5142488daf790ab57
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Sat May 24 15:38:54 2025 +0100
+
+    Removal of grid integrator code for brevity
+
+commit e80657e1da29200adef66d5bde7f57d9d8e2d910
+Author: BobDaGithubAccount <bobdaducaddress@duck.com>
+Date:   Sat May 24 14:07:11 2025 +0100
+
+    Added FFT based solving for better scaling
+
+commit 63ef98bc3af1597afaa8c4c68e05fe3516eaa275
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Thu Feb 20 14:32:18 2025 +0000
+
+    Changes
+
+commit 80e2b9f05d510171ab2c3a540bb611f3e3ebaee5
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Wed Feb 19 22:15:35 2025 +0000
+
+    Github statistics hotfix
+
+commit d55ee17a2dae9a08de9a62c0369a944e944c4e95
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Wed Feb 19 22:09:32 2025 +0000
+
+    Performance changes
+
+commit 5fbe3b8bb866ba8140122c174c2ead589b35779c
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Wed Feb 19 21:51:06 2025 +0000
+
+    Removed old code
+
+commit 84e546e22004eeb564b8074250c5d54490e53092
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Wed Feb 19 21:50:17 2025 +0000
+
+    Visibility changes
+
+commit 29b3a9b50ca3b5e41bc0bcf74601a7db5a447933
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Wed Feb 19 21:45:22 2025 +0000
+
+    Got marching cubes working!
+
+commit 87878d012fbb938b6506c61cd845c1cb94be6641
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Mon Feb 17 21:33:25 2025 +0000
+
+    Various changes
+
+commit a0ad8fde557b8a581bcd1a00d1b744fb8e06d92b
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Feb 15 22:25:28 2025 +0000
+
+    Formatting changes
+
+commit 41bd0d433654ff254a554ba90fd7b0604c5706c6
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Feb 15 22:08:54 2025 +0000
+
+    Note: push force erased two commits of approx 400 net additions previously
+
+commit 8e0a210433787558c266a8e44cf7ec2330f4141b
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Feb 15 22:05:35 2025 +0000
+
+    Got rust DFT simulator working (all i need to do now is get the rendering pipeline working)
+
+commit deaa3c74961b9167fb5410c832bb23bf86fb59a9
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Sat Jan 18 17:52:55 2025 +0000
+
+    Solid changes to rendering with marching cubes
+    
+    Still not working!
+
+commit 91577927e6cb8cd171832b527858b5d95b3d4f16
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Fri Jan 17 19:05:06 2025 +0000
+
+    Rust dft implementation
+    
+    I haven't hooked it in with my existing datastructures yet nor do I know if it works  yet. I will progress with getting rendering working with marching cubes first
+
+commit 3b1d7dcffb0fed46d75e68420afd276f8c724394
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Mon Jan 13 15:53:01 2025 +0000
+
+    Create log.log
+
+commit 461b978ebb43d9fd9e355017a981ea3dd9fad761
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Mon Jan 13 15:52:36 2025 +0000
+
+    Update .gitignore
+
+commit a4e61fc7af4d49ea18acb5e0bac67e082920f141
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Sat Jan 4 20:08:07 2025 +0000
+
+    bump
+
+commit b364fd620749143406754fa2a33c3ece8338af71
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Sat Jan 4 20:07:30 2025 +0000
+
+    Added gpu acceleration to the python simulation
+
+commit f37c57ac7df6cbb53e11c3667ceb52bf313ca9ed
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Wed Jan 1 13:42:26 2025 +0000
+
+    Pushed working changes
+    
+    For python implementation :D
+
+commit 30152839301a41b186a65584455c05c1e5e1612e
+Merge: 0b3ce9c 2eefacb
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Tue Dec 31 19:25:54 2024 +0000
+
+    Merge branch 'main' of https://github.com/BobDaGithubAccount/Atomica
+
+commit 0b3ce9cfd7119015290ed156d0d265729f9035a8
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Tue Dec 31 19:25:52 2024 +0000
+
+    Pushing working changes for python implementation
+    
+    It DOES NOT work yet - incorrect number of eigenstates for some reason. Will fix
+
+commit 2eefacb32d265644248f62f594d80f200e2ceed7
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 21 17:55:08 2024 +0000
+
+    Pushing working changes
+
+commit 19563bf8026bb038a53b9f5d25cc8faf80d80663
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sun Dec 15 21:14:28 2024 +0000
+
+    Started constructing state machine for simulation
+
+commit 03f2b8c5c9cf75868b4158fa61b55559455649b4
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 14 19:32:30 2024 +0000
+
+    Edit README.md
+
+commit e5b4e9b49ee20d57fb01822e9b3150e5fff7b314
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 14 19:30:01 2024 +0000
+
+    Refactor renderer module and move camera instance management
+
+commit a98004f676401d0d697ff04f0efc45ea7664cc78
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 14 19:24:59 2024 +0000
+
+    Fixed error
+
+commit f84b483398c21c9c169f992f3dfa4518f558dff5
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 14 13:18:22 2024 +0000
+
+    Added help command
+
+commit 6cc4e27ccedd5e0563efec020963058648907aeb
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 14 13:15:01 2024 +0000
+
+    Changed register_command macro
+
+commit f79c9fe91e6db4784423046b75639bc25b74ba43
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 14 13:13:12 2024 +0000
+
+    Added reset camera command
+
+commit c0ed1deba2e5e3ef91a79ca9cc88404f63a3f3f5
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 14 13:07:24 2024 +0000
+
+    Logging and command changes
+
+commit 7b9bb8ea32abc6bd932bb686bb5c088b8c6e9de8
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sat Dec 14 11:33:33 2024 +0000
+
+    Added FOV change functionality
+
+commit 3f318e099b925b593e6e2487380398cd72d100e6
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Fri Dec 13 16:03:46 2024 +0000
+
+    Created command registry framework
+
+commit 1a82485dea6d552b56222c94ee9c53063d12064d
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Wed Dec 11 13:45:41 2024 +0000
+
+    Sorted out aspect ratios with the GUI
+
+commit cc21d67b4e71d330f94b29218c277adf24981386
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Tue Dec 10 21:30:46 2024 +0000
+
+    Made GUI changes
+
+commit e57452dcc4a2e6e69b3eba16e3992f87b7b92488
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Sat Nov 16 10:03:11 2024 +0000
+
+    Localisation and event handling changes
+
+commit 93d711588d4a47414f2c70305d2e3997e2dbf44a
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Fri Nov 15 18:14:00 2024 +0000
+
+    Resizing capability
+    
+    By copying and scaling the output from an invisible canvas, I can ensure that I can always scale the context without dealing with pipeline internals (e.g. dynamic frame buffers)
+
+commit ffbb904d49e8381c4490c10da37ce82fae6414fc
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Mon Nov 11 15:56:00 2024 +0000
+
+    Update index.html
+
+commit ac79c9455abf1f89d8b348c135bd130138d33be8
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Tue Oct 29 11:55:41 2024 +0000
+
+    Add rustup installation check and update in setup script
+
+commit 03aa316838112933697060d6328113ac807267e5
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Tue Oct 29 11:53:29 2024 +0000
+
+    Added setup script
+
+commit f6cce37d6fabf8216fb95b4761f56e278ca6186f
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Tue Oct 29 11:51:50 2024 +0000
+
+    Cleaned up .idea folder
+
+commit 1c919cff9d22bd84f1c5f17e7aa0069d49bac823
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sun Oct 27 15:48:24 2024 +0000
+
+    Refactor build scripts and update file paths
+
+commit 67afa84969e813b2320a5c89860fd38bf155bd46
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sun Oct 27 15:42:43 2024 +0000
+
+    Localisation changes
+
+commit b4d07bb856f1a517db7437d06194b9dbc4e6e9cb
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Sun Oct 27 11:14:54 2024 +0000
+
+    Overhauled rendering internals and introduced a new workflow
+
+commit e5cdd01b1f0fc60f4d43c9d7a21a9f06165a8439
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 16:12:10 2024 +0100
+
+    Updated .gitignore
+
+commit 3bf7bfc23fde61c8159a9a6f1e998ab9ebd7f4a4
+Merge: 3da29db ed6bcc6
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 16:11:16 2024 +0100
+
+    Merge remote-tracking branch 'origin/main'
+
+commit 3da29db1a4a7c4f832d9ab3b2bf192cef5586b00
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 16:10:55 2024 +0100
+
+    Updated .gitignore
+
+commit ed6bcc6547a15826bfb754999a68df06137ee371
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Tue Oct 22 16:08:47 2024 +0100
+
+    Update README.md
+
+commit 12069d935fc2642c161b5f1772309e18d25df9e2
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 16:03:22 2024 +0100
+
+    Changed workflows - (just commiting to see if the permissions are now correctly configured)
+
+commit b57e4fb6bd7cab5217994c5576aeb4e2f1703017
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 15:51:09 2024 +0100
+
+    Changed workflows
+
+commit 2f128a3d8bb5ad341ff6f768f8ac09f0628164e0
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 15:45:59 2024 +0100
+
+    Changed workflows
+
+commit c678d227fd0fac282988a146b579b026011a2630
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 15:41:03 2024 +0100
+
+    Added diagnositc telemetry
+
+commit f94c535de6ade1d6acd3c5fc3429cf546b7281d7
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 15:39:17 2024 +0100
+
+    Edited deploy.yml
+
+commit 9259d0f2be8f4082e28795931143f40d8beb526c
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 22 15:37:31 2024 +0100
+
+    Changed gitignore and edited GitHub Pages Workflows
+
+commit 53d46c47dfc3386b0404cff1cddf309dfb662e91
+Author: BobDaGithubAccount <bobdaduckaddress@duck.com>
+Date:   Tue Oct 15 18:05:18 2024 +0100
+
+    Established MVP
+    
+    - Configured toolchains and implemented a three-d example to get the first steps working
+    - TODO: Create a unit testing framework and get GitHub Actions working correctly
+
+commit 145c991d412963762e5e637e381c19f44646e9c0
+Author: BobDaGithubAccount <62474433+BobDaGithubAccount@users.noreply.github.com>
+Date:   Sun Oct 13 17:12:31 2024 +0100
+
+    Initial commit
