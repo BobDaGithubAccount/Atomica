@@ -1,19 +1,24 @@
-use crate::log;
+use core::str;
+
+use crate::{log, generate_cube_string};
+use log::info;
 use nalgebra::DMatrix;
 use serde::{Deserialize, Serialize};
 use crate::simulation::*;
 use rustfft::{num_complex::Complex, FftPlanner};
+use statrs::function::erf::erfc;
+
 
 const TOLERANCE: f32 = 1e-1;
-const MAX_ITERATIONS: usize = 1000;
+const MAX_ITERATIONS: usize = 100;
 
 // Exchange–correlation constant for the electron gas (LDA, exchange only).
 const EXCHANGE_CORRELATION_CONSTANT: f32 = -0.738558766;
 
-// Physical box from –10 → +10 in each direction
-const BOX_LENGTH: f32 = 20.0;
+// Physical box from –50 → +50 in each direction
+const BOX_LENGTH: f32 = 48.0;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DFTSolver {
     pub final_density: Vec<f32>,
     pub eigenvalues: Option<Vec<f32>>,
@@ -30,7 +35,8 @@ impl DFTSolver {
     pub fn build_grid(&self, points_per_axis: usize) -> Vec<[f32; 3]> {
         let mut grid = Vec::with_capacity(points_per_axis * points_per_axis * points_per_axis);
         for x in 0..points_per_axis {
-            let xf = -10.0 + BOX_LENGTH * (x as f32 / (points_per_axis as f32 - 1.0));
+            let half = BOX_LENGTH / 2.0;
+            let xf   = -half + BOX_LENGTH * (x as f32 / (points_per_axis as f32 - 1.0));
             for y in 0..points_per_axis {
                 let yf = -10.0 + BOX_LENGTH * (y as f32 / (points_per_axis as f32 - 1.0));
                 for z in 0..points_per_axis {
@@ -52,6 +58,38 @@ impl DFTSolver {
             .map(|n| ([n.coordinates[0] as f32, n.coordinates[1] as f32, n.coordinates[2] as f32], n.atomic_number as f32))
             .unzip();
 
+        ///////////////////////////
+        // Find the index of your px basis in `config.basis`
+
+//        let px_index = config.basis.iter().enumerate().find_map(|(i, b)| {
+//            if let Some(g) = b.as_any().downcast_ref::<AngularGaussian>() {
+//                if g.l == (1, 0, 0)
+//                    && g.center == [0.0, 0.0, 0.0]
+//                    && (g.alpha - (1.1 / 12.0)).abs() < 1e-6
+//                {
+//                    Some(i)
+//                } else {
+//                    None
+//                }
+//            } else {
+//                None
+//            }
+//        }).expect("Couldn't find px orbital in basis set");
+//
+//        let dx = BOX_LENGTH / (points_per_axis as f32 - 1.0);
+//        info!("Sampling φ_px along +x axis:");
+//        for i in 0..points_per_axis {
+//            let x = -BOX_LENGTH/2.0 + i as f32 * dx;
+//            // grid index at (i, mid, mid)
+//            let idx = (i * points_per_axis + points_per_axis/2) * points_per_axis
+//                    + points_per_axis/2;
+//            let φx = config.basis[px_index].value(&[x, 0.0, 0.0]);
+//            info!("  φ_px({:+.3}) = {:.6}", x, φx);
+//        }
+//        info!("— end px diagnostic —\n");
+
+        // -----------------------------------
+
         let (density, eigenvalues) = scf_loop(
             &grid,
             points_per_axis,
@@ -62,6 +100,15 @@ impl DFTSolver {
         );
         self.final_density = density;
         self.eigenvalues = eigenvalues;
+    }
+}
+
+impl Clone for DFTSolver {
+    fn clone(&self) -> Self {
+        DFTSolver {
+            final_density: self.final_density.clone(),
+            eigenvalues: self.eigenvalues.clone(),
+        }
     }
 }
 
@@ -92,295 +139,158 @@ fn build_overlap_matrix(
     s
 }
 
-/// Poisson solver for the electron density via FFT (periodic boundary conditions).
-// fn compute_hartree_potential_fft(
-//     density: &[f32],
-//     points_per_axis: usize,
-// ) -> Vec<f32> {
-//     let n = points_per_axis;
-//     let n_grid = n * n * n;
-
-//     if density.len() != n_grid {
-//         panic!("Density length {} does not match grid size {}", density.len(), n_grid);
-//     }
-
-//     // Physical box length
-//     let l = BOX_LENGTH;
-//     // Grid spacing
-//     let n_f = n as f32;
-//     let delta = BOX_LENGTH / (n_f - 1.0);
-//     log(format!("Computing Hartree potential on {}³ grid with delta = {}", n, delta));
-
-//     // 1) pack density into complex array for FFT
-//     let mut data: Vec<Complex<f32>> = density
-//         .iter()
-//         .map(|&r| Complex::new(r, 0.0))
-//         .collect();
-
-//     // 2) forward 3D FFT (n² row‐FFTs on each axis)
-//     let mut planner = FftPlanner::<f32>::new();
-//     let fft = planner.plan_fft_forward(n);
-//     let ifft = planner.plan_fft_inverse(n);
-
-//     // helper to index (i,j,k) -> flat
-//     let idx = |i, j, k| (i * n + j) * n + k;
-
-//     // FFT along k
-//     for i in 0..n {
-//         for j in 0..n {
-//             let mut row: Vec<_> = (0..n).map(|k| data[idx(i, j, k)]).collect();
-//             fft.process(&mut row);
-//             for k in 0..n { data[idx(i, j, k)] = row[k]; }
-//         }
-//     }
-//     // FFT along j
-//     for i in 0..n {
-//         for k in 0..n {
-//             let mut row: Vec<_> = (0..n).map(|j| data[idx(i, j, k)]).collect();
-//             fft.process(&mut row);
-//             for j in 0..n { data[idx(i, j, k)] = row[j]; }
-//         }
-//     }
-//     // FFT along i
-//     for j in 0..n {
-//         for k in 0..n {
-//             let mut row: Vec<_> = (0..n).map(|i| data[idx(i, j, k)]).collect();
-//             fft.process(&mut row);
-//             for i in 0..n { data[idx(i, j, k)] = row[i]; }
-//         }
-//     }
-
-//     // 3) Solve Poisson in k‐space: V(k) = 4π ρ(k) / k², with k = 2π·m/L
-//     for i in 0..n {
-//         let ki = if i <= n / 2 { i as f32 } else { (i as f32) - (n as f32) };
-//         let kx = 2.0 * std::f32::consts::PI * ki / l;
-//         for j in 0..n {
-//             let kj = if j <= n / 2 { j as f32 } else { (j as f32) - (n as f32) };
-//             let ky = 2.0 * std::f32::consts::PI * kj / l;
-//             for k in 0..n {
-//                 let kk = if k <= n / 2 { k as f32 } else { (k as f32) - (n as f32) };
-//                 let kz = 2.0 * std::f32::consts::PI * kk / l;
-
-//                 let k2 = kx * kx + ky * ky + kz * kz;
-//                 let index = idx(i, j, k);
-//                 if k2.abs() < 1e-12 {
-//                     data[index] = Complex::new(0.0, 0.0); // zero‐mode
-//                 } else {
-//                     data[index] *= Complex::new(4.0 * std::f32::consts::PI / k2, 0.0);
-//                 }
-//             }
-//         }
-//     }
-
-//     // 4) inverse 3D FFT
-//     // along i
-//     for j in 0..n {
-//         for k in 0..n {
-//             let mut row: Vec<_> = (0..n).map(|i| data[idx(i, j, k)]).collect();
-//             ifft.process(&mut row);
-//             for i in 0..n { data[idx(i, j, k)] = row[i]; }
-//         }
-//     }
-//     // along j
-//     for i in 0..n {
-//         for k in 0..n {
-//             let mut row: Vec<_> = (0..n).map(|j| data[idx(i, j, k)]).collect();
-//             ifft.process(&mut row);
-//             for j in 0..n { data[idx(i, j, k)] = row[j]; }
-//         }
-//     }
-//     // along k
-//     for i in 0..n {
-//         for j in 0..n {
-//             let mut row: Vec<_> = (0..n).map(|k| data[idx(i, j, k)]).collect();
-//             ifft.process(&mut row);
-//             for k in 0..n { data[idx(i, j, k)] = row[k]; }
-//         }
-//     }
-
-//     let mut v = data
-//     .into_iter()
-//     .map(|c| c.re / (n_grid as f32))
-//     .collect::<Vec<f32>>();
-
-//     // Enforce Dirichlet BC: V = 0 on any boundary face (this will be coupled with DST)
-//     let n = points_per_axis;
-//     let idx = |i, j, k| (i * n + j) * n + k;
-//     for i in 0..n {
-//         for j in 0..n {
-//             v[idx(0,    i, j)] = 0.0;
-//             v[idx(n-1,  i, j)] = 0.0;
-//             v[idx(i,  0,   j)] = 0.0;
-//             v[idx(i, n-1, j)] = 0.0;
-//             v[idx(i,  j,   0)] = 0.0;
-//             v[idx(i,  j, n-1)] = 0.0;
-//         }
-//     }
-
-//     v
-// }
-
-/// Poisson solver via FFT + erfc/k-space split (PME style).
-/// Real‐space part now uses open boundaries (no wrap), so outside‐box = zero. 
-
-use statrs::function::erf::erf;
-
-fn compute_hartree_potential_fft(
-    density: &[f32],
+pub fn compute_hartree_potential_fft_padded(
+    neutral_density: &[f32],
     points_per_axis: usize,
+    pad: usize,
 ) -> Vec<f32> {
     let n = points_per_axis;
-    let n_grid = n * n * n;
-    assert_eq!(
-        density.len(), n_grid,
-        "Density length {} != grid size {}³",
-        density.len(), n
-    );
-
-    let l = BOX_LENGTH;
-    let delta = l / (n as f32 - 1.0);
+    let N = n + 2 * pad;
+    let N3 = N * N * N;
+    assert_eq!(neutral_density.len(), n*n*n,
+        "Density len {} != {}³", neutral_density.len(), n);
+    let delta = BOX_LENGTH / (n as f32 - 1.0);
     let dv = delta.powi(3);
-    log(format!("PME‐FFT Poisson: grid {}³, Δ={}", n, delta));
 
-    // 1) choose screening and cutoff
-    let alpha = 3.0 / delta;       // splits at ~3 cells
-    let r_cut = 4.0 * delta;       // real‐space cutoff
-    let r_cut2 = r_cut * r_cut;
+    log(format!("Padded FFT Poisson: {}³ → {}³ (pad={})", n, N, pad));
 
-    // 2) gather neighbor offsets within cutoff
-    let max_i = (r_cut / delta).ceil() as isize;
-    let mut neighbor_offsets = Vec::new();
+    // --- short‐range real‐space erfc sum on original grid ---
+    let alpha = 3.0 / delta;
+    let r_cut2 = (4.0 * delta).powi(2);
+    let max_i = (r_cut2.sqrt() / delta).ceil() as isize;
+    let mut neighbor = Vec::new();
     for dx in -max_i..=max_i {
         for dy in -max_i..=max_i {
             for dz in -max_i..=max_i {
-                let r2 = (dx as f32).powi(2)
-                       + (dy as f32).powi(2)
-                       + (dz as f32).powi(2);
+                let r2 = (dx*dx + dy*dy + dz*dz) as f32;
                 if r2 > 0.0 && r2 * delta * delta <= r_cut2 {
-                    neighbor_offsets.push((dx, dy, dz, r2));
+                    neighbor.push((dx, dy, dz, r2));
                 }
             }
         }
     }
-
-    // 3) open‐boundary real‐space erfc sum → v_short
-    let mut v_short = vec![0.0f32; n_grid];
-    // index returns None if outside box
-    let idx_opt = |x: isize, y: isize, z: isize| {
-        if x < 0 || x >= n as isize ||
-           y < 0 || y >= n as isize ||
-           z < 0 || z >= n as isize {
+    let mut v_short = vec![0.0f32; n*n*n];
+    let idx_opt = |x:isize, y:isize, z:isize| {
+        if x<0 || x>=n as isize || y<0 || y>=n as isize || z<0 || z>=n as isize {
             None
         } else {
-            Some(((x as usize * n + y as usize) * n + z as usize))
+            Some((x as usize * n + y as usize) * n + z as usize)
         }
     };
     for ix in 0..n as isize {
         for iy in 0..n as isize {
             for iz in 0..n as isize {
-                let center_idx = ((ix as usize * n + iy as usize) * n + iz as usize);
+                let dst = (ix as usize * n + iy as usize) * n + iz as usize;
                 let mut sum = 0.0f32;
-                for &(dx, dy, dz, r2) in &neighbor_offsets {
-                    if let Some(j) = idx_opt(ix + dx, iy + dy, iz + dz) {
+                for &(dx,dy,dz,r2) in &neighbor {
+                    if let Some(src) = idx_opt(ix+dx, iy+dy, iz+dz) {
                         let r = r2.sqrt() * delta;
-                        sum += density[j] * (erf((alpha * r) as f64) / (r as f64)) as f32;
+                        sum += neutral_density[src] * (erfc((alpha * r) as f64) / (r as f64)) as f32;
                     }
                 }
-                v_short[center_idx] = sum * dv;
+                v_short[dst] = sum * dv;
             }
         }
     }
 
-    // 4) pack density for FFT long‐range
-    let mut data: Vec<Complex<f32>> = density
-        .iter()
-        .map(|&ρ| Complex::new(ρ, 0.0))
-        .collect();
+    // --- pack neutral_density * dv into padded complex array ---
+    let mut data = vec![Complex::new(0.0,0.0); N3];
+    for ix in 0..n {
+        for iy in 0..n {
+            for iz in 0..n {
+                let src = (ix * n + iy) * n + iz;
+                let dst = ((ix+pad) * N + (iy+pad)) * N + (iz+pad);
+                data[dst] = Complex::new(neutral_density[src] * dv, 0.0);
+            }
+        }
+    }
 
-    // 5) FFT plans
+    // --- 3D FFT forward ---
     let mut planner = FftPlanner::<f32>::new();
-    let fft = planner.plan_fft_forward(n);
-    let ifft = planner.plan_fft_inverse(n);
+    let fft = planner.plan_fft_forward(N);
+    let ifft = planner.plan_fft_inverse(N);
+    let idx3 = |i,j,k| ((i * N + j) * N + k) as usize;
 
-    let idx3 = |i, j, k| ((i * n + j) * n + k) as usize;
-
-    // 6) forward 3D FFT (axes k, j, i)
-    for i in 0..n {
-        for j in 0..n {
-            let mut row = (0..n).map(|k| data[idx3(i,j,k)]).collect::<Vec<_>>();
+    for i in 0..N {
+        for j in 0..N {
+            let mut row = (0..N).map(|k| data[idx3(i,j,k)]).collect::<Vec<_>>();
             fft.process(&mut row);
-            for k in 0..n { data[idx3(i,j,k)] = row[k]; }
+            for k in 0..N { data[idx3(i,j,k)] = row[k]; }
         }
     }
-    for i in 0..n {
-        for k in 0..n {
-            let mut row = (0..n).map(|j| data[idx3(i,j,k)]).collect::<Vec<_>>();
+    for i in 0..N {
+        for k in 0..N {
+            let mut row = (0..N).map(|j| data[idx3(i,j,k)]).collect::<Vec<_>>();
             fft.process(&mut row);
-            for j in 0..n { data[idx3(i,j,k)] = row[j]; }
+            for j in 0..N { data[idx3(i,j,k)] = row[j]; }
         }
     }
-    for j in 0..n {
-        for k in 0..n {
-            let mut row = (0..n).map(|i| data[idx3(i,j,k)]).collect::<Vec<_>>();
+    for j in 0..N {
+        for k in 0..N {
+            let mut row = (0..N).map(|i| data[idx3(i,j,k)]).collect::<Vec<_>>();
             fft.process(&mut row);
-            for i in 0..n { data[idx3(i,j,k)] = row[i]; }
+            for i in 0..N { data[idx3(i,j,k)] = row[i]; }
         }
     }
 
-    // 7) apply screened Green's function in k‐space
+    // --- apply screened Green's function on padded box length ---
+    let Lpad = BOX_LENGTH + 2.0 * pad as f32 * delta;
     let four_pi = 4.0 * std::f32::consts::PI;
-    for i in 0..n {
-        let ki = if i <= n/2 { i as f32 } else { i as f32 - n as f32 };
-        let kx = two_pi() * ki / l;
-        for j in 0..n {
-            let kj = if j <= n/2 { j as f32 } else { j as f32 - n as f32 };
-            let ky = two_pi() * kj / l;
-            for k in 0..n {
-                let kk = if k <= n/2 { k as f32 } else { k as f32 - n as f32 };
-                let kz = two_pi() * kk / l;
+    for i in 0..N {
+        let ki = if i <= N/2 { i as f32 } else { i as f32 - N as f32 };
+        let kx = two_pi() * ki / Lpad;
+        for j in 0..N {
+            let kj = if j <= N/2 { j as f32 } else { j as f32 - N as f32 };
+            let ky = two_pi() * kj / Lpad;
+            for k in 0..N {
+                let kk = if k <= N/2 { k as f32 } else { k as f32 - N as f32 };
+                let kz = two_pi() * kk / Lpad;
                 let k2 = kx*kx + ky*ky + kz*kz;
                 let gk = if k2 > 1e-12 {
                     four_pi / k2 * (-k2 / (4.0*alpha*alpha)).exp()
-                } else {
-                    0.0
-                };
-                let idx = idx3(i,j,k);
-                data[idx] *= Complex::new(gk, 0.0);
+                } else { 0.0 };
+                data[idx3(i,j,k)] *= Complex::new(gk, 0.0);
             }
         }
     }
 
-    // 8) inverse 3D FFT (axes i, j, k)
-    for j in 0..n {
-        for k in 0..n {
-            let mut row = (0..n).map(|i| data[idx3(i,j,k)]).collect::<Vec<_>>();
+    // --- inverse 3D FFT ---
+    for j in 0..N {
+        for k in 0..N {
+            let mut row = (0..N).map(|i| data[idx3(i,j,k)]).collect::<Vec<_>>();
             ifft.process(&mut row);
-            for i in 0..n { data[idx3(i,j,k)] = row[i]; }
+            for i in 0..N { data[idx3(i,j,k)] = row[i]; }
         }
     }
-    for i in 0..n {
-        for k in 0..n {
-            let mut row = (0..n).map(|j| data[idx3(i,j,k)]).collect::<Vec<_>>();
+    for i in 0..N {
+        for k in 0..N {
+            let mut row = (0..N).map(|j| data[idx3(i,j,k)]).collect::<Vec<_>>();
             ifft.process(&mut row);
-            for j in 0..n { data[idx3(i,j,k)] = row[j]; }
+            for j in 0..N { data[idx3(i,j,k)] = row[j]; }
         }
     }
-    for i in 0..n {
-        for j in 0..n {
-            let mut row = (0..n).map(|k| data[idx3(i,j,k)]).collect::<Vec<_>>();
+    for i in 0..N {
+        for j in 0..N {
+            let mut row = (0..N).map(|k| data[idx3(i,j,k)]).collect::<Vec<_>>();
             ifft.process(&mut row);
-            for k in 0..n { data[idx3(i,j,k)] = row[k]; }
+            for k in 0..N { data[idx3(i,j,k)] = row[k]; }
         }
     }
 
-    // 9) normalize and combine
-    let inv_n3 = 1.0 / (n_grid as f32);
-    let mut v_long = data.into_iter().map(|c| c.re * inv_n3).collect::<Vec<_>>();
-    for i in 0..n_grid {
-        v_long[i] += v_short[i];
+    // --- crop back, normalize and combine ---
+    let mut v = vec![0.0f32; n*n*n];
+    for ix in 0..n {
+        for iy in 0..n {
+            for iz in 0..n {
+                let src = ((ix+pad)*N + (iy+pad))*N + (iz+pad);
+                let dst = (ix * n + iy) * n + iz;
+                // inv_N3 applied implicitly by FFT library, dv already in data
+                v[dst] = data[src].re + v_short[dst];
+            }
+        }
     }
 
-    v_long
+    v
 }
 
 // two_pi helper
@@ -389,7 +299,51 @@ fn two_pi() -> f32 {
     std::f32::consts::PI * 2.0
 }
 
+///// Pure direct‐sum Hartree (no FFT).  Very slow - only for diagnosis!
+pub fn compute_hartree_potential_direct(
+    density: &[f32],
+    points_per_axis: usize,
+) -> Vec<f32> {
+    let n = points_per_axis;
+    let N3 = n * n * n;
+    assert_eq!(density.len(), N3,
+        "Density len {} != {}³", density.len(), n);
+    let delta = BOX_LENGTH / (n as f32 - 1.0);
+    let dv = delta.powi(3);
 
+    log(format!("Direct‐sum Poisson: {}³ grid, Δ={:.6}", n, delta));
+
+    // collect coordinates of each grid point
+    let mut coords = Vec::with_capacity(N3);
+    for i in 0..n {
+        let x = -BOX_LENGTH/2.0 + delta * (i as f32);
+        for j in 0..n {
+            let y = -BOX_LENGTH/2.0 + delta * (j as f32);
+            for k in 0..n {
+                let z = -BOX_LENGTH/2.0 + delta * (k as f32);
+                coords.push([x, y, z]);
+            }
+        }
+    }
+
+    let mut v = vec![0.0f32; N3];
+    for a in 0..N3 {
+        let pa = coords[a];
+        let mut sum = 0.0f32;
+        for b in 0..N3 {
+            if a == b { continue; }
+            let pb = coords[b];
+            let dx = pa[0] - pb[0];
+            let dy = pa[1] - pb[1];
+            let dz = pa[2] - pb[2];
+            let r = (dx*dx + dy*dy + dz*dz).sqrt().max(1e-6);
+            sum += density[b] * (1.0 / r);
+        }
+        v[a] = sum * dv;
+    }
+
+    v
+}
 
 fn build_full_hamiltonian(
     grid: &[[f32; 3]],
@@ -403,7 +357,9 @@ fn build_full_hamiltonian(
     let mut h = DMatrix::<f32>::zeros(n, n);
 
     let dv = volume_element(points_per_axis);
-    let v_h = compute_hartree_potential_fft(neutral_density, points_per_axis);
+    let v_h = compute_hartree_potential_fft_padded(neutral_density, points_per_axis, 1);
+
+//    let v_h = compute_hartree_potential_direct(neutral_density, points_per_axis);
 
     for i in 0..n {
         for j in 0..n {
@@ -527,6 +483,33 @@ fn scf_loop(
         let eig = ht.symmetric_eigen();
         let c = linv.transpose() * eig.eigenvectors;
 
+        //// Diagnostics ////
+
+        let m = (&c.transpose() * &s) * &c;
+        for i in 0..3 {
+            for j in 0..3 {
+                info!("M[{},{}] = {:.3e}", i, j, m[(i,j)]);
+            }
+        }
+
+        for (k,&ev) in eig.eigenvalues.iter().enumerate() {
+            info!("  ε[{}] = {:.6}", k, ev);
+        }
+
+        for (i, b) in basis.iter().enumerate() {
+
+            let gauss: &AngularGaussian = b
+                .as_any()
+                .downcast_ref::<AngularGaussian>()
+                .expect("Expected AngularGaussian");
+            info!(
+                "Basis[{}] at {:?}, l=({},{},{}), alpha={}",
+                i, gauss.center, gauss.l.0, gauss.l.1, gauss.l.2, gauss.alpha
+            );
+        }
+
+        ///////////////////
+
         // 4) Update density from occupied eigenvectors
         let new_density = update_density(grid, &c, basis, num_electrons);
 
@@ -577,7 +560,9 @@ pub fn run_scf_command(args: Vec<String>) {
     solver.run_scf(&cfg);
 
     *SIMULATION_STATE.lock().unwrap() =
-        SimulationState::new(0.0, solver, SimulationStatus::Completed);
+        SimulationState::new(0.0, solver.clone(), SimulationStatus::Completed);
 
     log("SCF complete".into());
+
+    info!("{}", generate_cube_string(&solver.final_density, cfg.points_per_axis, BOX_LENGTH));
 }

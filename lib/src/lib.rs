@@ -10,6 +10,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::HtmlElement;
 use log::info;
 use three_d::renderer::*;
+use std::fmt::Write;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
@@ -129,4 +130,36 @@ pub fn handle_command(command_line: &str) {
     } else {
         log(format!("Command not found: {}", command_name));
     }
+}
+
+pub fn generate_cube_string(
+    density: &[f32],
+    points_per_axis: usize,
+    box_length: f32,
+) -> String {
+    let mut output = String::new();
+    let n = points_per_axis;
+    let delta = box_length / (n as f32 - 1.0);
+
+    writeln!(&mut output, "Electron density").unwrap();
+    writeln!(&mut output, "Generated from DFTSolver output").unwrap();
+    writeln!(&mut output, "{:5} {:10.6} {:10.6} {:10.6}", 1, 0.0, 0.0, 0.0).unwrap();
+    writeln!(&mut output, "{:5} {:.6}  {:.6}  {:.6}", n, delta, 0.0, 0.0).unwrap();
+    writeln!(&mut output, "{:5} {:.6}  {:.6}  {:.6}", n, 0.0, delta, 0.0).unwrap();
+    writeln!(&mut output, "{:5} {:.6}  {:.6}  {:.6}", n, 0.0, 0.0, delta).unwrap();
+    writeln!(&mut output, "{:5} {:10.6} {:10.6} {:10.6}  {:>2}", 0, 0.0, 0.0, 0.0, 0).unwrap();
+
+    for x in 0..n {
+        for y in 0..n {
+            for z in 0..n {
+                let idx = (x * n + y) * n + z;
+                write!(&mut output, "{:13.6e}", density[idx]).unwrap();
+                if (z % 6) == 5 {
+                    writeln!(&mut output).unwrap();
+                }
+            }
+        }
+    }
+
+    output
 }
