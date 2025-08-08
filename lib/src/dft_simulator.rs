@@ -7,16 +7,18 @@ use serde::{Deserialize, Serialize};
 use crate::simulation::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use statrs::function::erf::erfc;
+use lazy_static::lazy_static;
+use std::sync::Mutex;
 
 
-const TOLERANCE: f32 = 1e-1;
-const MAX_ITERATIONS: usize = 100;
+lazy_static! {
+    pub static ref TOLERANCE: Mutex<f32> = Mutex::new(1e-9);
+}
 
-// Exchange–correlation constant for the electron gas (LDA, exchange only).
+const MAX_ITERATIONS:usize = 100;
 const EXCHANGE_CORRELATION_CONSTANT: f32 = -0.738558766;
-
-// Physical box from –50 → +50 in each direction
 const BOX_LENGTH: f32 = 48.0;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DFTSolver {
@@ -57,6 +59,7 @@ impl DFTSolver {
             .iter()
             .map(|n| ([n.coordinates[0] as f32, n.coordinates[1] as f32, n.coordinates[2] as f32], n.atomic_number as f32))
             .unzip();
+        *TOLERANCE.lock().unwrap() = config.tolerance;
 
         ///////////////////////////
         // Find the index of your px basis in `config.basis`
@@ -345,6 +348,8 @@ pub fn compute_hartree_potential_direct(
     v
 }
 
+
+
 fn build_full_hamiltonian(
     grid: &[[f32; 3]],
     points_per_axis: usize,
@@ -386,6 +391,7 @@ fn build_full_hamiltonian(
 
     h
 }
+
 
 /// Update the electron density on the grid from the occupied eigenfunctions.
 fn update_density(
@@ -486,8 +492,9 @@ fn scf_loop(
         //// Diagnostics ////
 
         let m = (&c.transpose() * &s) * &c;
-        for i in 0..3 {
-            for j in 0..3 {
+        let (rows, cols) = m.shape();
+        for i in 0..rows {
+            for j in 0..cols {
                 info!("M[{},{}] = {:.3e}", i, j, m[(i,j)]);
             }
         }
@@ -524,7 +531,7 @@ fn scf_loop(
         log(String::from(format!(" SCF iter {}: Density updated, diff={:.3e}", iter + 1, diff)));
 
         // 6) Check for convergence
-        if diff < TOLERANCE {
+        if diff < *TOLERANCE.lock().unwrap() {
             log(format!("Converged in {} iterations", iter + 1));
             return (density, Some(eig.eigenvalues.iter().cloned().collect()));
         }
