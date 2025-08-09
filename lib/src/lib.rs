@@ -132,6 +132,8 @@ pub fn handle_command(command_line: &str) {
     }
 }
 
+//This will always output in the console for diagnosis with https://www.openmx-square.org/viewer/
+//NOTE: it will not be centered as that is applied in the rendering pipeline
 pub fn generate_cube_string(
     density: &[f32],
     points_per_axis: usize,

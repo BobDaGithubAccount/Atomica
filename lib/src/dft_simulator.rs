@@ -37,16 +37,6 @@ impl DFTSolver {
     pub fn build_grid(&self, points_per_axis: usize) -> Vec<[f32; 3]> {
         let mut grid = Vec::with_capacity(points_per_axis * points_per_axis * points_per_axis);
         for x in 0..points_per_axis {
-//            let half = BOX_LENGTH / 2.0;
-//            let xf   = -half + BOX_LENGTH * (x as f32 / (points_per_axis as f32 - 1.0));
-//            for y in 0..points_per_axis {
-//                let yf = -10.0 + BOX_LENGTH * (y as f32 / (points_per_axis as f32 - 1.0));
-//                for z in 0..points_per_axis {
-//                    let zf = -10.0 + BOX_LENGTH * (z as f32 / (points_per_axis as f32 - 1.0));
-//                    grid.push([xf, yf, zf]);
-//                }
-//            }
-
             let half = BOX_LENGTH / 2.0;
             let xf   = -half + BOX_LENGTH * (x as f32 / (points_per_axis as f32 - 1.0));
             for y in 0..points_per_axis {
@@ -70,38 +60,6 @@ impl DFTSolver {
             .map(|n| ([n.coordinates[0] as f32, n.coordinates[1] as f32, n.coordinates[2] as f32], n.atomic_number as f32))
             .unzip();
         *TOLERANCE.lock().unwrap() = config.tolerance;
-
-        ///////////////////////////
-        // Find the index of your px basis in `config.basis`
-
-//        let px_index = config.basis.iter().enumerate().find_map(|(i, b)| {
-//            if let Some(g) = b.as_any().downcast_ref::<AngularGaussian>() {
-//                if g.l == (1, 0, 0)
-//                    && g.center == [0.0, 0.0, 0.0]
-//                    && (g.alpha - (1.1 / 12.0)).abs() < 1e-6
-//                {
-//                    Some(i)
-//                } else {
-//                    None
-//                }
-//            } else {
-//                None
-//            }
-//        }).expect("Couldn't find px orbital in basis set");
-//
-//        let dx = BOX_LENGTH / (points_per_axis as f32 - 1.0);
-//        info!("Sampling φ_px along +x axis:");
-//        for i in 0..points_per_axis {
-//            let x = -BOX_LENGTH/2.0 + i as f32 * dx;
-//            // grid index at (i, mid, mid)
-//            let idx = (i * points_per_axis + points_per_axis/2) * points_per_axis
-//                    + points_per_axis/2;
-//            let φx = config.basis[px_index].value(&[x, 0.0, 0.0]);
-//            info!("  φ_px({:+.3}) = {:.6}", x, φx);
-//        }
-//        info!("— end px diagnostic —\n");
-
-        // -----------------------------------
 
         let (density, eigenvalues) = scf_loop(
             &grid,
@@ -360,7 +318,7 @@ pub fn compute_hartree_potential_direct(
 }
 
 // Numerical approximation of laplacian
-// TODO: Analytic integrals might be better here
+// TODO: Analytic integrals might be better here (nevermind)
 pub fn build_kinetic_matrix(
     grid: &[[f32; 3]],
     points_per_axis: usize,
@@ -373,7 +331,6 @@ pub fn build_kinetic_matrix(
 
     let ngrid = grid.len();
 
-    // Precompute phi_b(r) on the grid: vals[bi][idx]
     let mut vals: Vec<Vec<f32>> = vec![vec![0.0f32; ngrid]; n_basis];
     for (bi, b) in basis.iter().enumerate() {
         for (idx, pt) in grid.iter().enumerate() {
@@ -381,11 +338,8 @@ pub fn build_kinetic_matrix(
         }
     }
 
-    // helper to compute linear index for (ix,iy,iz)
     let idx3 = |ix: usize, iy: usize, iz: usize| -> usize { (ix * n + iy) * n + iz };
 
-    // Compute discrete Laplacian of each basis function at interior grid points
-    // lap[b][idx] = \nabla^2 phi_b at idx. Boundaries are left as zero (simple)
     let mut lap: Vec<Vec<f32>> = vec![vec![0.0f32; ngrid]; n_basis];
 
     if n >= 3 {
@@ -405,7 +359,6 @@ pub fn build_kinetic_matrix(
         }
     }
 
-    // Now integrate: T_ij = ∑_grid phi_i(r) * (-1/2 * lap_j(r)) * dV
     let mut t = DMatrix::<f32>::zeros(n_basis, n_basis);
     for i in 0..n_basis {
         for j in 0..n_basis {
@@ -418,7 +371,7 @@ pub fn build_kinetic_matrix(
         }
     }
 
-    // sanity checks (small debug prints; you can comment these out later)
+    // sanity checks
     #[cfg(debug_assertions)]
     {
         let mut max_sym_diff = 0.0f32;
@@ -445,15 +398,13 @@ pub fn build_full_hamiltonian(
     let n = basis.len();
     let mut h = DMatrix::<f32>::zeros(n, n);
 
-    // Use a single consistent volume element (make sure volume_element uses delta = BOX_LENGTH/(n-1))
     let dv = volume_element(points_per_axis);
 
-    // Hartree potential on grid (FFT padded). You can switch to direct for small tests.
+    // Hartree potential on grid (FFT padded).
     let v_h = compute_hartree_potential_fft_padded(neutral_density, points_per_axis, 1);
     // let v_h = compute_hartree_potential_direct(neutral_density, points_per_axis);
 
     // Build kinetic matrix T_ij once (finite-difference projection).
-    // Ensure the function build_kinetic_matrix is defined & imported in your crate.
     let t_mat = build_kinetic_matrix(grid, points_per_axis, basis);
 
     // Loop over basis functions and build potential part of H,
@@ -496,7 +447,7 @@ pub fn build_full_hamiltonian(
         }
     }
 
-    // Enforce hermiticity (symmetrize) to remove tiny numerical asymmetry:
+    // IMPORTANT: Enforce hermiticity (symmetrize) to remove tiny numerical asymmetry:
     // H = 0.5 * (H + H^T)
     let h_transpose = h.transpose();
     let h_sym = (&h + &h_transpose) * 0.5;

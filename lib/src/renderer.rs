@@ -1,4 +1,3 @@
-// use crate::log;
 use std::sync::Mutex;
 use lazy_static::lazy_static;
 use three_d::{renderer::*, FrameInputGenerator, SurfaceSettings, WindowedContext};
@@ -123,8 +122,6 @@ pub fn main() {
         }
     });
 }
-
-
 
 //fn generate_mesh_from_density() -> CpuMesh {
 //
