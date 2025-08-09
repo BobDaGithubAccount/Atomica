@@ -17,7 +17,7 @@ lazy_static! {
 
 const MAX_ITERATIONS:usize = 100;
 const EXCHANGE_CORRELATION_CONSTANT: f32 = -0.738558766;
-const BOX_LENGTH: f32 = 8.0;
+pub const BOX_LENGTH: f32 = 8.0;
 
 
 #[derive(Debug, Serialize, Deserialize)]

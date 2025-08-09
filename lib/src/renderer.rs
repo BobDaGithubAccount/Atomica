@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use three_d::{renderer::*, FrameInputGenerator, SurfaceSettings, WindowedContext};
 use log::info;
 use crate::simulation::*;
+use crate::dft_simulator::*;
 
 lazy_static! {
     pub static ref CAMERA_INSTANCE: Mutex<Option<Camera>> = Mutex::new(None);
@@ -123,178 +124,177 @@ pub fn main() {
     });
 }
 
-// fn generate_mesh_from_density() -> CpuMesh {
 
-//     if let Ok(state) = SIMULATION_STATE.try_lock() {
-//         if state.dft_simulator.final_density.is_empty() {
-//             return CpuMesh::default();
-//         }
 
-//         let density = state.dft_simulator.final_density.clone();
-//         let grid_size = (state.dft_simulator.final_density.len() as f64)
-//             .powf(1.0 / 3.0)
-//             .round() as usize;
-//         let iso_value = (*state.dft_simulator.final_density.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap()) * 1.1;
-
-//         let mut vertices = Vec::new();
-//         let mut indices: Vec<u32> = Vec::new();
-    
-//         // Linear interpolation along an edge. (might want to improve this)
-//         fn vertex_interp(p1: Vec3, p2: Vec3, valp1: f32, valp2: f32, iso_value: f32) -> Vec3 {
-//             if (iso_value - valp1).abs() < 0.00001 {
-//                 return p1;
-//             }
-//             if (iso_value - valp2).abs() < 0.00001 {
-//                 return p2;
-//             }
-//             if (valp1 - valp2).abs() < 0.00001 {
-//                 return p1;
-//             }
-//             let mu = (iso_value - valp1) / (valp2 - valp1);
-//             p1 + (p2 - p1) * mu
-//         }
-    
-//         // Loop over each cell in the grid.
-//         for z in 0..(grid_size - 1) {
-//             for y in 0..(grid_size - 1) {
-//                 for x in 0..(grid_size - 1) {
-//                     // Indices into the density array for the 8 corners.
-//                     let cube_indices = [
-//                         x     + y * grid_size + z * grid_size * grid_size,
-//                         x + 1 + y * grid_size + z * grid_size * grid_size,
-//                         x + 1 + (y + 1) * grid_size + z * grid_size * grid_size,
-//                         x     + (y + 1) * grid_size + z * grid_size * grid_size,
-//                         x     + y * grid_size + (z + 1) * grid_size * grid_size,
-//                         x + 1 + y * grid_size + (z + 1) * grid_size * grid_size,
-//                         x + 1 + (y + 1) * grid_size + (z + 1) * grid_size * grid_size,
-//                         x     + (y + 1) * grid_size + (z + 1) * grid_size * grid_size,
-//                     ];
-    
-//                     // 3D positions for the cell corners.
-//                     let cube_positions = [
-//                         vec3(x as f32, y as f32, z as f32),
-//                         vec3((x + 1) as f32, y as f32, z as f32),
-//                         vec3((x + 1) as f32, (y + 1) as f32, z as f32),
-//                         vec3(x as f32, (y + 1) as f32, z as f32),
-//                         vec3(x as f32, y as f32, (z + 1) as f32),
-//                         vec3((x + 1) as f32, y as f32, (z + 1) as f32),
-//                         vec3((x + 1) as f32, (y + 1) as f32, (z + 1) as f32),
-//                         vec3(x as f32, (y + 1) as f32, (z + 1) as f32),
-//                     ];
-    
-//                     // Get the density values at the corners.
-//                     let cube_values = [
-//                         density[cube_indices[0]],
-//                         density[cube_indices[1]],
-//                         density[cube_indices[2]],
-//                         density[cube_indices[3]],
-//                         density[cube_indices[4]],
-//                         density[cube_indices[5]],
-//                         density[cube_indices[6]],
-//                         density[cube_indices[7]],
-//                     ];
-    
-//                     // Determine the cube configuration.
-//                     let mut cube_index = 0;
-//                     if cube_values[0] < iso_value { cube_index |= 1; }
-//                     if cube_values[1] < iso_value { cube_index |= 2; }
-//                     if cube_values[2] < iso_value { cube_index |= 4; }
-//                     if cube_values[3] < iso_value { cube_index |= 8; }
-//                     if cube_values[4] < iso_value { cube_index |= 16; }
-//                     if cube_values[5] < iso_value { cube_index |= 32; }
-//                     if cube_values[6] < iso_value { cube_index |= 64; }
-//                     if cube_values[7] < iso_value { cube_index |= 128; }
-    
-//                     // If there is no intersection, continue.
-//                     if EDGE_TABLE[cube_index] == 0 {
-//                         continue;
-//                     }
-    
-//                     // Compute the intersection points.
-//                     let mut vert_list: [Vec3; 12] = [vec3(0.0, 0.0, 0.0); 12];
-//                     if (EDGE_TABLE[cube_index] & 1) != 0 {
-//                         vert_list[0] = vertex_interp(cube_positions[0], cube_positions[1], cube_values[0], cube_values[1], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 2) != 0 {
-//                         vert_list[1] = vertex_interp(cube_positions[1], cube_positions[2], cube_values[1], cube_values[2], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 4) != 0 {
-//                         vert_list[2] = vertex_interp(cube_positions[2], cube_positions[3], cube_values[2], cube_values[3], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 8) != 0 {
-//                         vert_list[3] = vertex_interp(cube_positions[3], cube_positions[0], cube_values[3], cube_values[0], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 16) != 0 {
-//                         vert_list[4] = vertex_interp(cube_positions[4], cube_positions[5], cube_values[4], cube_values[5], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 32) != 0 {
-//                         vert_list[5] = vertex_interp(cube_positions[5], cube_positions[6], cube_values[5], cube_values[6], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 64) != 0 {
-//                         vert_list[6] = vertex_interp(cube_positions[6], cube_positions[7], cube_values[6], cube_values[7], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 128) != 0 {
-//                         vert_list[7] = vertex_interp(cube_positions[7], cube_positions[4], cube_values[7], cube_values[4], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 256) != 0 {
-//                         vert_list[8] = vertex_interp(cube_positions[0], cube_positions[4], cube_values[0], cube_values[4], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 512) != 0 {
-//                         vert_list[9] = vertex_interp(cube_positions[1], cube_positions[5], cube_values[1], cube_values[5], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 1024) != 0 {
-//                         vert_list[10] = vertex_interp(cube_positions[2], cube_positions[6], cube_values[2], cube_values[6], iso_value);
-//                     }
-//                     if (EDGE_TABLE[cube_index] & 2048) != 0 {
-//                         vert_list[11] = vertex_interp(cube_positions[3], cube_positions[7], cube_values[3], cube_values[7], iso_value);
-//                     }
-    
-//                     // Build the triangles for this cell.
-//                     let mut i = 0;
-//                     while TRI_TABLE[cube_index][i] != -1 {
-//                         let index0 = TRI_TABLE[cube_index][i] as usize;
-//                         let index1 = TRI_TABLE[cube_index][i + 1] as usize;
-//                         let index2 = TRI_TABLE[cube_index][i + 2] as usize;
-    
-//                         let base_index = vertices.len() as u32;
-//                         vertices.push(vert_list[index0]);
-//                         vertices.push(vert_list[index1]);
-//                         vertices.push(vert_list[index2]);
-    
-//                         indices.push(base_index);
-//                         indices.push(base_index + 1);
-//                         indices.push(base_index + 2);
-    
-//                         i += 3;
-//                     }
-//                 }
-//             }
-//         }
-    
-//         let vertex_vectors: Vec<Vector3<f32>> = vertices
-//         .into_iter()
-//         .map(|v| Vector3::new(v[0], v[1], v[2]))
-//         .collect();
-    
-//         let positions = Positions::F32(vertex_vectors);
-//         println!("Positions length: {}", positions.len());
-    
-//         let mesh = CpuMesh {
-//             positions,
-//             indices: Indices::U32(indices.into_iter().map(|i| i as u32).collect()),
-//             ..Default::default()
-//         };
-//         println!("Mesh vertex count: {}", mesh.vertex_count());
-
-//         return mesh;
-//     }
-//     else {
-//         return CpuMesh::default();
-//     }
-// }
+//fn generate_mesh_from_density() -> CpuMesh {
+//
+//    if let Ok(state) = SIMULATION_STATE.try_lock() {
+//        if state.dft_simulator.final_density.is_empty() {
+//            return CpuMesh::default();
+//        }
+//
+//        let density = state.dft_simulator.final_density.clone();
+//        let grid_size = (density.len() as f64).powf(1.0 / 3.0).round() as usize;
+//        let iso_value = (*density.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap()) * 1.1;
+//
+//        let mut vertices = Vec::new();
+//        let mut indices: Vec<u32> = Vec::new();
+//
+//        fn vertex_interp(p1: Vec3, p2: Vec3, valp1: f32, valp2: f32, iso_value: f32) -> Vec3 {
+//            if (iso_value - valp1).abs() < 0.00001 {
+//                return p1;
+//            }
+//            if (iso_value - valp2).abs() < 0.00001 {
+//                return p2;
+//            }
+//            if (valp1 - valp2).abs() < 0.00001 {
+//                return p1;
+//            }
+//            let mu = (iso_value - valp1) / (valp2 - valp1);
+//            p1 + (p2 - p1) * mu
+//        }
+//
+//        let gsq = grid_size * grid_size;
+//        let grid_size_usize = grid_size as usize;
+//
+//        for z in 0..(grid_size_usize - 1) {
+//            for y in 0..(grid_size_usize - 1) {
+//                for x in 0..(grid_size_usize - 1) {
+//                    let x = x as usize;
+//                    let y = y as usize;
+//                    let z = z as usize;
+//
+//                    let cube_indices = [
+//                        x     + y * grid_size_usize + z * gsq,
+//                        x + 1 + y * grid_size_usize + z * gsq,
+//                        x + 1 + (y + 1) * grid_size_usize + z * gsq,
+//                        x     + (y + 1) * grid_size_usize + z * gsq,
+//                        x     + y * grid_size_usize + (z + 1) * gsq,
+//                        x + 1 + y * grid_size_usize + (z + 1) * gsq,
+//                        x + 1 + (y + 1) * grid_size_usize + (z + 1) * gsq,
+//                        x     + (y + 1) * grid_size_usize + (z + 1) * gsq,
+//                    ];
+//
+//                    // Bounds check for safety (should not trigger, but helps debug)
+//                    if cube_indices.iter().any(|&i| i >= density.len()) {
+//                        continue;
+//                    }
+//
+//                    let cube_positions = [
+//                        vec3(x as f32, y as f32, z as f32),
+//                        vec3((x + 1) as f32, y as f32, z as f32),
+//                        vec3((x + 1) as f32, (y + 1) as f32, z as f32),
+//                        vec3(x as f32, (y + 1) as f32, z as f32),
+//                        vec3(x as f32, y as f32, (z + 1) as f32),
+//                        vec3((x + 1) as f32, y as f32, (z + 1) as f32),
+//                        vec3((x + 1) as f32, (y + 1) as f32, (z + 1) as f32),
+//                        vec3(x as f32, (y + 1) as f32, (z + 1) as f32),
+//                    ];
+//
+//                    let cube_values = [
+//                        density[cube_indices[0]],
+//                        density[cube_indices[1]],
+//                        density[cube_indices[2]],
+//                        density[cube_indices[3]],
+//                        density[cube_indices[4]],
+//                        density[cube_indices[5]],
+//                        density[cube_indices[6]],
+//                        density[cube_indices[7]],
+//                    ];
+//
+//                    let mut cube_index = 0;
+//                    if cube_values[0] < iso_value { cube_index |= 1; }
+//                    if cube_values[1] < iso_value { cube_index |= 2; }
+//                    if cube_values[2] < iso_value { cube_index |= 4; }
+//                    if cube_values[3] < iso_value { cube_index |= 8; }
+//                    if cube_values[4] < iso_value { cube_index |= 16; }
+//                    if cube_values[5] < iso_value { cube_index |= 32; }
+//                    if cube_values[6] < iso_value { cube_index |= 64; }
+//                    if cube_values[7] < iso_value { cube_index |= 128; }
+//
+//                    if EDGE_TABLE[cube_index] == 0 {
+//                        continue;
+//                    }
+//
+//                    let mut vert_list: [Vec3; 12] = [vec3(0.0, 0.0, 0.0); 12];
+//                    if (EDGE_TABLE[cube_index] & 1) != 0 {
+//                        vert_list[0] = vertex_interp(cube_positions[0], cube_positions[1], cube_values[0], cube_values[1], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 2) != 0 {
+//                        vert_list[1] = vertex_interp(cube_positions[1], cube_positions[2], cube_values[1], cube_values[2], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 4) != 0 {
+//                        vert_list[2] = vertex_interp(cube_positions[2], cube_positions[3], cube_values[2], cube_values[3], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 8) != 0 {
+//                        vert_list[3] = vertex_interp(cube_positions[3], cube_positions[0], cube_values[3], cube_values[0], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 16) != 0 {
+//                        vert_list[4] = vertex_interp(cube_positions[4], cube_positions[5], cube_values[4], cube_values[5], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 32) != 0 {
+//                        vert_list[5] = vertex_interp(cube_positions[5], cube_positions[6], cube_values[5], cube_values[6], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 64) != 0 {
+//                        vert_list[6] = vertex_interp(cube_positions[6], cube_positions[7], cube_values[6], cube_values[7], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 128) != 0 {
+//                        vert_list[7] = vertex_interp(cube_positions[7], cube_positions[4], cube_values[7], cube_values[4], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 256) != 0 {
+//                        vert_list[8] = vertex_interp(cube_positions[0], cube_positions[4], cube_values[0], cube_values[4], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 512) != 0 {
+//                        vert_list[9] = vertex_interp(cube_positions[1], cube_positions[5], cube_values[1], cube_values[5], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 1024) != 0 {
+//                        vert_list[10] = vertex_interp(cube_positions[2], cube_positions[6], cube_values[2], cube_values[6], iso_value);
+//                    }
+//                    if (EDGE_TABLE[cube_index] & 2048) != 0 {
+//                        vert_list[11] = vertex_interp(cube_positions[3], cube_positions[7], cube_values[3], cube_values[7], iso_value);
+//                    }
+//
+//                    let mut i = 0;
+//                    while TRI_TABLE[cube_index][i] != -1 {
+//                        let index0 = TRI_TABLE[cube_index][i] as usize;
+//                        let index1 = TRI_TABLE[cube_index][i + 1] as usize;
+//                        let index2 = TRI_TABLE[cube_index][i + 2] as usize;
+//
+//                        let base_index = vertices.len() as u32;
+//                        vertices.push(vert_list[index0]);
+//                        vertices.push(vert_list[index1]);
+//                        vertices.push(vert_list[index2]);
+//
+//                        indices.push(base_index);
+//                        indices.push(base_index + 1);
+//                        indices.push(base_index + 2);
+//
+//                        i += 3;
+//                    }
+//                }
+//            }
+//        }
+//
+//        let vertex_vectors: Vec<Vector3<f32>> = vertices
+//            .into_iter()
+//            .map(|v| Vector3::new(v[0], v[1], v[2]))
+//            .collect();
+//
+//        let positions = Positions::F32(vertex_vectors);
+//
+//        let mesh = CpuMesh {
+//            positions,
+//            indices: Indices::U32(indices.into_iter().map(|i| i as u32).collect()),
+//            ..Default::default()
+//        };
+//
+//        return mesh;
+//    } else {
+//        return CpuMesh::default();
+//    }
+//}
 
 fn generate_mesh_from_density() -> CpuMesh {
-
     if let Ok(state) = SIMULATION_STATE.try_lock() {
         if state.dft_simulator.final_density.is_empty() {
             return CpuMesh::default();
@@ -302,11 +302,50 @@ fn generate_mesh_from_density() -> CpuMesh {
 
         let density = state.dft_simulator.final_density.clone();
         let grid_size = (density.len() as f64).powf(1.0 / 3.0).round() as usize;
-        let iso_value = (*density.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap()) * 1.1;
+        if grid_size < 2 {
+            return CpuMesh::default();
+        }
+
+        // physical grid spacing and half-extent
+        let n = grid_size as f32;
+        let delta = BOX_LENGTH / (n - 1.0);
+        let half = BOX_LENGTH / 2.0;
+        let dv = volume_element(grid_size);
+
+        // compute center-of-mass (physical coordinates) of the density
+        let mut n_calc = 0.0f32;
+        let mut rcm = vec3(0.0f32, 0.0f32, 0.0f32);
+        let gsq = grid_size * grid_size;
+        for z in 0..grid_size {
+            for y in 0..grid_size {
+                for x in 0..grid_size {
+                    let idx = x + y * grid_size + z * gsq;
+                    let rho = density[idx];
+                    let px = (x as f32) * delta - half;
+                    let py = (y as f32) * delta - half;
+                    let pz = (z as f32) * delta - half;
+                    n_calc += rho * dv;
+                    rcm += vec3(px, py, pz) * (rho * dv);
+                }
+            }
+        }
+        let r_cm = if n_calc.abs() > 1e-12 {
+            rcm / n_calc
+        } else {
+            vec3(0.0, 0.0, 0.0)
+        };
+
+        // compute iso value (same heuristic you used)
+        let min_val = *density
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(&0.0);
+        let iso_value = min_val * 1.1_f32;
 
         let mut vertices = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
 
+        // linear interpolation helper (keeps your original behavior)
         fn vertex_interp(p1: Vec3, p2: Vec3, valp1: f32, valp2: f32, iso_value: f32) -> Vec3 {
             if (iso_value - valp1).abs() < 0.00001 {
                 return p1;
@@ -321,41 +360,48 @@ fn generate_mesh_from_density() -> CpuMesh {
             p1 + (p2 - p1) * mu
         }
 
-        let gsq = grid_size * grid_size;
-        let grid_size_usize = grid_size as usize;
+        // march cubes over cells: Note we use physical positions and subtract r_cm
+        for z in 0..(grid_size - 1) {
+            for y in 0..(grid_size - 1) {
+                for x in 0..(grid_size - 1) {
+                    let x_u = x as usize;
+                    let y_u = y as usize;
+                    let z_u = z as usize;
 
-        for z in 0..(grid_size_usize - 1) {
-            for y in 0..(grid_size_usize - 1) {
-                for x in 0..(grid_size_usize - 1) {
-                    let x = x as usize;
-                    let y = y as usize;
-                    let z = z as usize;
-
+                    // indices into flattened density array (x fastest)
                     let cube_indices = [
-                        x     + y * grid_size_usize + z * gsq,
-                        x + 1 + y * grid_size_usize + z * gsq,
-                        x + 1 + (y + 1) * grid_size_usize + z * gsq,
-                        x     + (y + 1) * grid_size_usize + z * gsq,
-                        x     + y * grid_size_usize + (z + 1) * gsq,
-                        x + 1 + y * grid_size_usize + (z + 1) * gsq,
-                        x + 1 + (y + 1) * grid_size_usize + (z + 1) * gsq,
-                        x     + (y + 1) * grid_size_usize + (z + 1) * gsq,
+                        x_u + y_u * grid_size + z_u * gsq,
+                        x_u + 1 + y_u * grid_size + z_u * gsq,
+                        x_u + 1 + (y_u + 1) * grid_size + z_u * gsq,
+                        x_u + (y_u + 1) * grid_size + z_u * gsq,
+                        x_u + y_u * grid_size + (z_u + 1) * gsq,
+                        x_u + 1 + y_u * grid_size + (z_u + 1) * gsq,
+                        x_u + 1 + (y_u + 1) * grid_size + (z_u + 1) * gsq,
+                        x_u + (y_u + 1) * grid_size + (z_u + 1) * gsq,
                     ];
 
-                    // Bounds check for safety (should not trigger, but helps debug)
+                    // safety
                     if cube_indices.iter().any(|&i| i >= density.len()) {
                         continue;
                     }
 
+                    // corner positions in physical coords, shifted by r_cm to recenter mesh
+                    let corner = |xi: usize, yi: usize, zi: usize| -> Vec3 {
+                        let px = (xi as f32) * delta - half - r_cm.x;
+                        let py = (yi as f32) * delta - half - r_cm.y;
+                        let pz = (zi as f32) * delta - half - r_cm.z;
+                        vec3(px, py, pz)
+                    };
+
                     let cube_positions = [
-                        vec3(x as f32, y as f32, z as f32),
-                        vec3((x + 1) as f32, y as f32, z as f32),
-                        vec3((x + 1) as f32, (y + 1) as f32, z as f32),
-                        vec3(x as f32, (y + 1) as f32, z as f32),
-                        vec3(x as f32, y as f32, (z + 1) as f32),
-                        vec3((x + 1) as f32, y as f32, (z + 1) as f32),
-                        vec3((x + 1) as f32, (y + 1) as f32, (z + 1) as f32),
-                        vec3(x as f32, (y + 1) as f32, (z + 1) as f32),
+                        corner(x_u, y_u, z_u),
+                        corner(x_u + 1, y_u, z_u),
+                        corner(x_u + 1, y_u + 1, z_u),
+                        corner(x_u, y_u + 1, z_u),
+                        corner(x_u, y_u, z_u + 1),
+                        corner(x_u + 1, y_u, z_u + 1),
+                        corner(x_u + 1, y_u + 1, z_u + 1),
+                        corner(x_u, y_u + 1, z_u + 1),
                     ];
 
                     let cube_values = [
@@ -421,11 +467,11 @@ fn generate_mesh_from_density() -> CpuMesh {
                         vert_list[11] = vertex_interp(cube_positions[3], cube_positions[7], cube_values[3], cube_values[7], iso_value);
                     }
 
-                    let mut i = 0;
-                    while TRI_TABLE[cube_index][i] != -1 {
-                        let index0 = TRI_TABLE[cube_index][i] as usize;
-                        let index1 = TRI_TABLE[cube_index][i + 1] as usize;
-                        let index2 = TRI_TABLE[cube_index][i + 2] as usize;
+                    let mut i_tri = 0;
+                    while TRI_TABLE[cube_index][i_tri] != -1 {
+                        let index0 = TRI_TABLE[cube_index][i_tri] as usize;
+                        let index1 = TRI_TABLE[cube_index][i_tri + 1] as usize;
+                        let index2 = TRI_TABLE[cube_index][i_tri + 2] as usize;
 
                         let base_index = vertices.len() as u32;
                         vertices.push(vert_list[index0]);
@@ -436,15 +482,16 @@ fn generate_mesh_from_density() -> CpuMesh {
                         indices.push(base_index + 1);
                         indices.push(base_index + 2);
 
-                        i += 3;
+                        i_tri += 3;
                     }
                 }
             }
         }
 
+        // convert to CpuMesh expected types (Vector3)
         let vertex_vectors: Vec<Vector3<f32>> = vertices
             .into_iter()
-            .map(|v| Vector3::new(v[0], v[1], v[2]))
+            .map(|v| Vector3::new(v.x, v.y, v.z))
             .collect();
 
         let positions = Positions::F32(vertex_vectors);
