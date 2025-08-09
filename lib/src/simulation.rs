@@ -121,7 +121,7 @@ lazy_static! {
                 num_electrons: 1,
                 basis: vec![Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0})],
                 points_per_axis: 32,
-                tolerance: 1e-4
+                tolerance: 1e-1
             },
         );
 
@@ -133,7 +133,7 @@ lazy_static! {
                 num_electrons: 2,
                 basis: vec![Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0})],
                 points_per_axis: 32,
-                tolerance: 1e-4
+                tolerance: 1e-1
             },
         );
 
