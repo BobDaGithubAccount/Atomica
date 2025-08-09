@@ -17,7 +17,7 @@ lazy_static! {
 
 const MAX_ITERATIONS:usize = 100;
 const EXCHANGE_CORRELATION_CONSTANT: f32 = -0.738558766;
-const BOX_LENGTH: f32 = 48.0;
+const BOX_LENGTH: f32 = 8.0;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,12 +37,22 @@ impl DFTSolver {
     pub fn build_grid(&self, points_per_axis: usize) -> Vec<[f32; 3]> {
         let mut grid = Vec::with_capacity(points_per_axis * points_per_axis * points_per_axis);
         for x in 0..points_per_axis {
+//            let half = BOX_LENGTH / 2.0;
+//            let xf   = -half + BOX_LENGTH * (x as f32 / (points_per_axis as f32 - 1.0));
+//            for y in 0..points_per_axis {
+//                let yf = -10.0 + BOX_LENGTH * (y as f32 / (points_per_axis as f32 - 1.0));
+//                for z in 0..points_per_axis {
+//                    let zf = -10.0 + BOX_LENGTH * (z as f32 / (points_per_axis as f32 - 1.0));
+//                    grid.push([xf, yf, zf]);
+//                }
+//            }
+
             let half = BOX_LENGTH / 2.0;
             let xf   = -half + BOX_LENGTH * (x as f32 / (points_per_axis as f32 - 1.0));
             for y in 0..points_per_axis {
-                let yf = -10.0 + BOX_LENGTH * (y as f32 / (points_per_axis as f32 - 1.0));
+                let yf = -half + BOX_LENGTH * (y as f32 / (points_per_axis as f32 - 1.0));
                 for z in 0..points_per_axis {
-                    let zf = -10.0 + BOX_LENGTH * (z as f32 / (points_per_axis as f32 - 1.0));
+                    let zf = -half + BOX_LENGTH * (z as f32 / (points_per_axis as f32 - 1.0));
                     grid.push([xf, yf, zf]);
                 }
             }
@@ -116,8 +126,9 @@ impl Clone for DFTSolver {
 }
 
 pub fn volume_element(points_per_axis: usize) -> f32 {
-    let n_grid = (points_per_axis * points_per_axis * points_per_axis) as f32;
-    BOX_LENGTH.powi(3) / n_grid
+    let n = points_per_axis as f32;
+    let delta = BOX_LENGTH / (n - 1.0);
+    return delta.powi(3);
 }
 
 
@@ -149,11 +160,11 @@ pub fn compute_hartree_potential_fft_padded(
 ) -> Vec<f32> {
     let n = points_per_axis;
     let N = n + 2 * pad;
-    let N3 = N * N * N;
+    let n3 = N * N * N;
     assert_eq!(neutral_density.len(), n*n*n,
         "Density len {} != {}³", neutral_density.len(), n);
     let delta = BOX_LENGTH / (n as f32 - 1.0);
-    let dv = delta.powi(3);
+    let dv = volume_element(points_per_axis as usize);
 
     log(format!("Padded FFT Poisson: {}³ → {}³ (pad={})", n, N, pad));
 
@@ -197,7 +208,7 @@ pub fn compute_hartree_potential_fft_padded(
     }
 
     // --- pack neutral_density * dv into padded complex array ---
-    let mut data = vec![Complex::new(0.0,0.0); N3];
+    let mut data = vec![Complex::new(0.0,0.0); n3];
     for ix in 0..n {
         for iy in 0..n {
             for iz in 0..n {
@@ -348,9 +359,82 @@ pub fn compute_hartree_potential_direct(
     v
 }
 
+// Numerical approximation of laplacian
+// TODO: Analytic integrals might be better here
+pub fn build_kinetic_matrix(
+    grid: &[[f32; 3]],
+    points_per_axis: usize,
+    basis: &[Box<dyn BasisFunction>],
+) -> DMatrix<f32> {
+    let n_basis = basis.len();
+    let n = points_per_axis;
+    let delta = BOX_LENGTH / (n as f32 - 1.0);
+    let dv = volume_element(points_per_axis);
+
+    let ngrid = grid.len();
+
+    // Precompute phi_b(r) on the grid: vals[bi][idx]
+    let mut vals: Vec<Vec<f32>> = vec![vec![0.0f32; ngrid]; n_basis];
+    for (bi, b) in basis.iter().enumerate() {
+        for (idx, pt) in grid.iter().enumerate() {
+            vals[bi][idx] = b.value(pt);
+        }
+    }
+
+    // helper to compute linear index for (ix,iy,iz)
+    let idx3 = |ix: usize, iy: usize, iz: usize| -> usize { (ix * n + iy) * n + iz };
+
+    // Compute discrete Laplacian of each basis function at interior grid points
+    // lap[b][idx] = \nabla^2 phi_b at idx. Boundaries are left as zero (simple)
+    let mut lap: Vec<Vec<f32>> = vec![vec![0.0f32; ngrid]; n_basis];
+
+    if n >= 3 {
+        for ix in 1..(n - 1) {
+            for iy in 1..(n - 1) {
+                for iz in 1..(n - 1) {
+                    let idx = idx3(ix, iy, iz);
+                    for bi in 0..n_basis {
+                        let center = vals[bi][idx];
+                        let lap_x = vals[bi][idx3(ix + 1, iy, iz)] - 2.0 * center + vals[bi][idx3(ix - 1, iy, iz)];
+                        let lap_y = vals[bi][idx3(ix, iy + 1, iz)] - 2.0 * center + vals[bi][idx3(ix, iy - 1, iz)];
+                        let lap_z = vals[bi][idx3(ix, iy, iz + 1)] - 2.0 * center + vals[bi][idx3(ix, iy, iz - 1)];
+                        lap[bi][idx] = (lap_x + lap_y + lap_z) / (delta * delta);
+                    }
+                }
+            }
+        }
+    }
+
+    // Now integrate: T_ij = ∑_grid phi_i(r) * (-1/2 * lap_j(r)) * dV
+    let mut t = DMatrix::<f32>::zeros(n_basis, n_basis);
+    for i in 0..n_basis {
+        for j in 0..n_basis {
+            let mut sum = 0.0f32;
+            for idx in 0..ngrid {
+                // note: lap[j][idx] is zero at boundaries; this is a simple approach
+                sum += vals[i][idx] * (-0.5f32 * lap[j][idx]) * dv;
+            }
+            t[(i, j)] = sum;
+        }
+    }
+
+    // sanity checks (small debug prints; you can comment these out later)
+    #[cfg(debug_assertions)]
+    {
+        let mut max_sym_diff = 0.0f32;
+        for i in 0..n_basis {
+            for j in 0..n_basis {
+                max_sym_diff = max_sym_diff.max((t[(i, j)] - t[(j, i)]).abs());
+            }
+        }
+        log(format!("build_kinetic_matrix: trace(T) = {:.6}, max |T-T^T| = {:.3e}", t.trace(), max_sym_diff));
+    }
+
+    t
+}
 
 
-fn build_full_hamiltonian(
+pub fn build_full_hamiltonian(
     grid: &[[f32; 3]],
     points_per_axis: usize,
     basis: &[Box<dyn BasisFunction>],
@@ -361,37 +445,70 @@ fn build_full_hamiltonian(
     let n = basis.len();
     let mut h = DMatrix::<f32>::zeros(n, n);
 
+    // Use a single consistent volume element (make sure volume_element uses delta = BOX_LENGTH/(n-1))
     let dv = volume_element(points_per_axis);
+
+    // Hartree potential on grid (FFT padded). You can switch to direct for small tests.
     let v_h = compute_hartree_potential_fft_padded(neutral_density, points_per_axis, 1);
+    // let v_h = compute_hartree_potential_direct(neutral_density, points_per_axis);
 
-//    let v_h = compute_hartree_potential_direct(neutral_density, points_per_axis);
+    // Build kinetic matrix T_ij once (finite-difference projection).
+    // Ensure the function build_kinetic_matrix is defined & imported in your crate.
+    let t_mat = build_kinetic_matrix(grid, points_per_axis, basis);
 
+    // Loop over basis functions and build potential part of H,
+    // then add kinetic contribution from t_mat.
     for i in 0..n {
         for j in 0..n {
-            let mut hij = 0.0;
+            let mut hij_pot = 0.0f32;
             for (k_idx, &pt) in grid.iter().enumerate() {
-                let φi = basis[i].value(&pt);
-                let φj = basis[j].value(&pt);
+                let phi_i = basis[i].value(&pt);
+                let phi_j = basis[j].value(&pt);
 
-                // nuclear attraction + exchange-correlation
-                let v_nuc = atomic_centers.iter().zip(atomic_charges).map(|(ac, &q)| {
-                    let dx = pt[0] - ac[0];
-                    let dy = pt[1] - ac[1];
-                    let dz = pt[2] - ac[2];
-                    -q / dx.hypot(dy).hypot(dz).max(1e-6)
-                }).sum::<f32>();
-                let ρ = neutral_density[k_idx].max(1e-12);
-                let v_xc = EXCHANGE_CORRELATION_CONSTANT * ρ.powf(1.0 / 3.0);
+                // nuclear attraction: - sum_a Z_a / |r - R_a|
+                let v_nuc = atomic_centers
+                    .iter()
+                    .zip(atomic_charges.iter())
+                    .map(|(ac, &q)| {
+                        let dx = pt[0] - ac[0];
+                        let dy = pt[1] - ac[1];
+                        let dz = pt[2] - ac[2];
+                        // protect against r->0 on grid: use small floor
+                        let r = dx.hypot(dy).hypot(dz).max(1e-6);
+                        -q / r
+                    })
+                    .sum::<f32>();
 
-                hij += φi * (v_nuc + v_h[k_idx] + v_xc) * φj * dv;
+                // exchange-correlation (simple local form you already use)
+                let rho = neutral_density[k_idx].max(1e-12);
+                let v_xc = EXCHANGE_CORRELATION_CONSTANT * rho.powf(1.0 / 3.0);
+
+                // effective potential at grid point
+                let v_eff = v_nuc + v_h[k_idx] + v_xc;
+
+                hij_pot += phi_i * v_eff * phi_j * dv;
             }
-            h[(i, j)] = hij;
+
+            // Add kinetic matrix element (T_ij) to potential integral.
+            // The kinetic matrix already implements (-1/2 ∇²) projection.
+            let tij = t_mat[(i, j)];
+            h[(i, j)] = tij + hij_pot;
+        }
+    }
+
+    // Enforce hermiticity (symmetrize) to remove tiny numerical asymmetry:
+    // H = 0.5 * (H + H^T)
+    let h_transpose = h.transpose();
+    let h_sym = (&h + &h_transpose) * 0.5;
+    // Copy back
+    for i in 0..n {
+        for j in 0..n {
+            h[(i, j)] = h_sym[(i, j)];
         }
     }
 
     h
 }
-
 
 /// Update the electron density on the grid from the occupied eigenfunctions.
 fn update_density(
@@ -489,7 +606,7 @@ fn scf_loop(
         let eig = ht.symmetric_eigen();
         let c = linv.transpose() * eig.eigenvectors;
 
-        //// Diagnostics ////
+        ////// Diagnostics ////
 
         let m = (&c.transpose() * &s) * &c;
         let (rows, cols) = m.shape();
@@ -504,16 +621,24 @@ fn scf_loop(
         }
 
         for (i, b) in basis.iter().enumerate() {
-
-            let gauss: &AngularGaussian = b
-                .as_any()
-                .downcast_ref::<AngularGaussian>()
-                .expect("Expected AngularGaussian");
-            info!(
-                "Basis[{}] at {:?}, l=({},{},{}), alpha={}",
-                i, gauss.center, gauss.l.0, gauss.l.1, gauss.l.2, gauss.alpha
-            );
+            if let Some(gauss) = b.as_any().downcast_ref::<AngularGaussian>() {
+                info!(
+                    "Basis[{}] at {:?}, l=({},{},{}), alpha={}",
+                    i, gauss.center, gauss.l.0, gauss.l.1, gauss.l.2, gauss.alpha
+                );
+            } else {
+                info!("Basis[{}] is not an AngularGaussian, skipping...", i);
+            }
         }
+
+        let mut max_diff = 0.0f32;
+        for i in 0..h.nrows() { for j in 0..h.ncols() {
+            max_diff = max_diff.max((h[(i,j)] - h[(j,i)]).abs());
+        }}
+        log(format!("max |H - H^T| = {}", max_diff));
+
+        let s_eig = s.symmetric_eigen();
+        log(format!("S eigenvalues: {:?}", s_eig.eigenvalues));
 
         ///////////////////
 

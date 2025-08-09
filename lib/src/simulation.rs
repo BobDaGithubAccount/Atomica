@@ -19,6 +19,30 @@ impl Clone for Box<dyn BasisFunction> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct GaussianBasis {
+    pub center: [f32; 3],
+    pub alpha: f32,
+}
+
+impl BasisFunction for GaussianBasis {
+    fn center(&self) -> [f32; 3] {
+        self.center
+    }
+    fn value(&self, point: &[f32; 3]) -> f32 {
+        let dx = point[0] - self.center[0];
+        let dy = point[1] - self.center[1];
+        let dz = point[2] - self.center[2];
+        (-self.alpha * (dx * dx + dy * dy + dz * dz)).exp()
+    }
+    fn clone_box(&self) -> Box<dyn BasisFunction> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// A Cartesian Gaussian of arbitrary angular momentum (ℓₓ,ℓᵧ,ℓ𝓏).
 #[derive(Debug, Clone)]
 pub struct AngularGaussian {
@@ -95,9 +119,9 @@ lazy_static! {
             SimulationConfig {
                 nuclei: vec![Nucleus { species: "H".into(), atomic_number: 1, coordinates: [0.0, 0.0, 0.0] }],
                 num_electrons: 1,
-                basis: vec![Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 1.0, l: (0, 0, 0) })],
+                basis: vec![Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0})],
                 points_per_axis: 32,
-                tolerance: 1e-10
+                tolerance: 1e-4
             },
         );
 
@@ -107,9 +131,9 @@ lazy_static! {
             SimulationConfig {
                 nuclei: vec![Nucleus { species: "He".into(), atomic_number: 2, coordinates: [0.0, 0.0, 0.0] }],
                 num_electrons: 2,
-                basis: vec![Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 1.0, l: (0, 0, 0)})],
+                basis: vec![Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 1.0})],
                 points_per_axis: 32,
-                tolerance: 1e-10
+                tolerance: 1e-4
             },
         );
 
@@ -123,11 +147,11 @@ lazy_static! {
                 ],
                 num_electrons: 2,
                 basis: vec![
-                    Box::new(AngularGaussian { center: [-1.0, 0.0, 0.0], alpha: 1.0, l: (0, 0, 0)}),
-                    Box::new(AngularGaussian { center: [1.0, 0.0, 0.0], alpha: 1.0, l: (0, 0, 0)}),
+                    Box::new(GaussianBasis { center: [-1.0, 0.0, 0.0], alpha: 4.0}),
+                    Box::new(GaussianBasis { center: [1.0, 0.0, 0.0], alpha: 4.0,}),
                 ],
                 points_per_axis: 32,
-                tolerance: 1e-10
+                tolerance: 1e-1
             },
         );
 
@@ -141,11 +165,11 @@ lazy_static! {
                 ],
                 num_electrons: 2,
                 basis: vec![
-                    Box::new(AngularGaussian { center: [-0.37, 0.0, 0.0], alpha: 1.0, l: (0, 0, 0)}),
-                    Box::new(AngularGaussian { center: [0.37, 0.0, 0.0], alpha: 1.0, l: (0, 0, 0)}),
+                    Box::new(GaussianBasis { center: [-0.37, 0.0, 0.0], alpha: 1.0}),
+                    Box::new(GaussianBasis { center: [0.37, 0.0, 0.0], alpha: 1.0}),
                 ],
                 points_per_axis: 10,
-                tolerance: 1e-10
+                tolerance: 1e-1
             },
         );
 
@@ -302,7 +326,6 @@ pub struct SimulationConfig {
     pub num_electrons: usize,
     pub basis: Vec<Box<dyn BasisFunction>>,
     pub tolerance: f32,
-
 }
 
 impl Default for SimulationConfig {
@@ -316,7 +339,7 @@ impl Default for SimulationConfig {
             }],
             num_electrons: 1,
             basis: vec![Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 1.0, l: (0,0,0)})],
-            tolerance: 1e-10
+            tolerance: 1e-5
         }
     }
 }
