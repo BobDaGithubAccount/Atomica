@@ -263,19 +263,19 @@ export function handle_command(command_line) {
 }
 
 function __wbg_adapter_28(arg0, arg1, arg2) {
-    wasm.closure367_externref_shim(arg0, arg1, arg2);
+    wasm.closure267_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_31(arg0, arg1, arg2) {
-    wasm.closure392_externref_shim(arg0, arg1, arg2);
+    wasm.closure402_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_42(arg0, arg1) {
-    wasm._dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h2c5f863a2909b61f(arg0, arg1);
+function __wbg_adapter_44(arg0, arg1) {
+    wasm._dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h448439cb97e05677(arg0, arg1);
 }
 
 function __wbg_adapter_47(arg0, arg1, arg2) {
-    wasm.closure420_externref_shim(arg0, arg1, arg2);
+    wasm.closure430_externref_shim(arg0, arg1, arg2);
 }
 
 async function __wbg_load(module, imports) {
@@ -1203,40 +1203,40 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper1078 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 421, __wbg_adapter_47);
+    imports.wbg.__wbindgen_closure_wrapper1091 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 431, __wbg_adapter_47);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper805 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 368, __wbg_adapter_28);
+    imports.wbg.__wbindgen_closure_wrapper622 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 268, __wbg_adapter_28);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper905 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 393, __wbg_adapter_31);
+    imports.wbg.__wbindgen_closure_wrapper918 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 403, __wbg_adapter_31);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper907 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 393, __wbg_adapter_31);
+    imports.wbg.__wbindgen_closure_wrapper920 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 403, __wbg_adapter_31);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper909 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 393, __wbg_adapter_31);
+    imports.wbg.__wbindgen_closure_wrapper922 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 403, __wbg_adapter_31);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper911 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 393, __wbg_adapter_31);
+    imports.wbg.__wbindgen_closure_wrapper924 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 403, __wbg_adapter_31);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper913 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 393, __wbg_adapter_31);
+    imports.wbg.__wbindgen_closure_wrapper926 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 403, __wbg_adapter_31);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper915 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 393, __wbg_adapter_42);
+    imports.wbg.__wbindgen_closure_wrapper928 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 403, __wbg_adapter_31);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper917 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 393, __wbg_adapter_31);
+    imports.wbg.__wbindgen_closure_wrapper930 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 403, __wbg_adapter_44);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
