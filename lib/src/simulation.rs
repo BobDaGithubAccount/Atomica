@@ -235,31 +235,272 @@ lazy_static! {
             },
         );
 
+
         m.insert(
-            "oxygen_minimal".into(),
+            "benzene".into(),
             SimulationConfig {
-                nuclei: vec![Nucleus {
-                    species: "O".into(),
-                    atomic_number: 8,
-                    coordinates: [0.0, 0.0, 0.0],
-                }],
-                num_electrons: 8,
-                points_per_axis: 40,
-                basis: vec![
-                    // 1s core shell (3 Gaussian primitives)
-                    Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 130.70932, l: (0, 0, 0) }),
-                    Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 23.808861, l: (0, 0, 0) }),
-                    Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 6.4436083, l: (0, 0, 0) }),
+                // Carbon ring: radius ~1.397 Å; hydrogens ~1.09 Å further out (C-H ≈ 1.09 Å)
+                nuclei: vec![
+                    // Carbons (6)
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [ 1.397,  0.0,     0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [ 0.6985,  1.209837,0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [-0.6985,  1.209837,0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [-1.397,  0.0,     0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [-0.6985, -1.209837,0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [ 0.6985, -1.209837,0.0] },
 
-                    // 2s valence shell
-                    Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 1.502, l: (0, 0, 0) }),
-
-                    // 2p orbitals
-                    Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 1.502, l: (1, 0, 0) }),
-                    Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 1.502, l: (0, 1, 0) }),
-                    Box::new(AngularGaussian { center: [0.0, 0.0, 0.0], alpha: 1.502, l: (0, 0, 1) }),
+                    // Hydrogens (6)
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 2.487,   0.0,      0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 1.2435,  2.153805, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-1.2435,  2.153805, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-2.487,   0.0,     0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-1.2435, -2.153805, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 1.2435, -2.153805, 0.0] },
                 ],
-                tolerance: 1e-1
+                num_electrons: 42,
+                // Basis: simple contracted-like sets built from isotropic Gaussians only (no angular Gaussians)
+                // Carbon STO-3G-like exponents: 71.6168370, 13.0450960, 3.5305122
+                // Hydrogen STO-3G-like exponents: 3.42525091, 0.62391373, 0.1688554
+                basis: vec![
+                    // Carbon centers (3 gaussians per carbon)
+                    Box::new(GaussianBasis { center: [ 1.397,   0.0,      0.0], alpha: 71.6168370 }),
+                    Box::new(GaussianBasis { center: [ 1.397,   0.0,      0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [ 1.397,   0.0,      0.0], alpha: 3.5305122 }),
+
+                    Box::new(GaussianBasis { center: [ 0.6985,  1.209837, 0.0], alpha: 71.6168370 }),
+                    Box::new(GaussianBasis { center: [ 0.6985,  1.209837, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [ 0.6985,  1.209837, 0.0], alpha: 3.5305122 }),
+
+                    Box::new(GaussianBasis { center: [-0.6985,  1.209837, 0.0], alpha: 71.6168370 }),
+                    Box::new(GaussianBasis { center: [-0.6985,  1.209837, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [-0.6985,  1.209837, 0.0], alpha: 3.5305122 }),
+
+                    Box::new(GaussianBasis { center: [-1.397,   0.0,      0.0], alpha: 71.6168370 }),
+                    Box::new(GaussianBasis { center: [-1.397,   0.0,      0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [-1.397,   0.0,      0.0], alpha: 3.5305122 }),
+
+                    Box::new(GaussianBasis { center: [-0.6985, -1.209837, 0.0], alpha: 71.6168370 }),
+                    Box::new(GaussianBasis { center: [-0.6985, -1.209837, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [-0.6985, -1.209837, 0.0], alpha: 3.5305122 }),
+
+                    Box::new(GaussianBasis { center: [ 0.6985, -1.209837, 0.0], alpha: 71.6168370 }),
+                    Box::new(GaussianBasis { center: [ 0.6985, -1.209837, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [ 0.6985, -1.209837, 0.0], alpha: 3.5305122 }),
+
+                    Box::new(GaussianBasis { center: [ 2.487,   0.0,      0.0], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [ 2.487,   0.0,      0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [ 2.487,   0.0,      0.0], alpha: 0.1688554 }),
+
+                    Box::new(GaussianBasis { center: [ 1.2435,  2.153805, 0.0], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [ 1.2435,  2.153805, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [ 1.2435,  2.153805, 0.0], alpha: 0.1688554 }),
+
+                    Box::new(GaussianBasis { center: [-1.2435,  2.153805, 0.0], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [-1.2435,  2.153805, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-1.2435,  2.153805, 0.0], alpha: 0.1688554 }),
+
+                    Box::new(GaussianBasis { center: [-2.487,   0.0,      0.0], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [-2.487,   0.0,      0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-2.487,   0.0,      0.0], alpha: 0.1688554 }),
+
+                    Box::new(GaussianBasis { center: [-1.2435, -2.153805, 0.0], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [-1.2435, -2.153805, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-1.2435, -2.153805, 0.0], alpha: 0.1688554 }),
+
+                    Box::new(GaussianBasis { center: [ 1.2435, -2.153805, 0.0], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [ 1.2435, -2.153805, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [ 1.2435, -2.153805, 0.0], alpha: 0.1688554 }),
+                ],
+                // finer real-space sampling because aromatic pi-system benefits from resolution
+                points_per_axis: 64,
+                tolerance: 1e-2,
+            },
+        );
+
+        // Lower-resolution / faster debug version (will actually run well in a browser)
+        m.insert(
+            "benzene_low_res".into(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [ 1.397,  0.0,     0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [ 0.6985,  1.209837,0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [-0.6985,  1.209837,0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [-1.397,  0.0,     0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [-0.6985, -1.209837,0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [ 0.6985, -1.209837,0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 2.487,   0.0,      0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 1.2435,  2.153805, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-1.2435,  2.153805, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-2.487,   0.0,     0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-1.2435, -2.153805, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 1.2435, -2.153805, 0.0] },
+                ],
+                num_electrons: 42,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [ 1.397,   0.0,      0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [ 0.6985,  1.209837, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [-0.6985,  1.209837, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [-1.397,   0.0,      0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [-0.6985, -1.209837, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [ 0.6985, -1.209837, 0.0], alpha: 13.0450960 }),
+
+                    Box::new(GaussianBasis { center: [ 2.487,   0.0,      0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [ 1.2435,  2.153805, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-1.2435,  2.153805, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-2.487,   0.0,      0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-1.2435, -2.153805, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [ 1.2435, -2.153805, 0.0], alpha: 0.62391373 }),
+                ],
+                points_per_axis: 32,
+                tolerance: 1e-1,
+            },
+        );
+
+        m.insert(
+            "co2".into(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus { species: "O".into(), atomic_number: 8, coordinates: [-1.16, 0.0, 0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [0.0,  0.0, 0.0]   },
+                    Nucleus { species: "O".into(), atomic_number: 8, coordinates: [ 1.16, 0.0, 0.0] },
+                ],
+                num_electrons: 22,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [-1.16, 0.0, 0.0], alpha: 130.70932 }),
+                    Box::new(GaussianBasis { center: [-1.16, 0.0, 0.0], alpha: 23.808861 }),
+                    Box::new(GaussianBasis { center: [-1.16, 0.0, 0.0], alpha: 6.4436083 }),
+
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 71.6168370 }),
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 3.5305122 }),
+
+                    Box::new(GaussianBasis { center: [1.16, 0.0, 0.0], alpha: 130.70932 }),
+                    Box::new(GaussianBasis { center: [1.16, 0.0, 0.0], alpha: 23.808861 }),
+                    Box::new(GaussianBasis { center: [1.16, 0.0, 0.0], alpha: 6.4436083 }),
+                ],
+                points_per_axis: 56,
+                tolerance: 1e-1,
+            },
+        );
+
+        m.insert(
+            "co2_low_res".into(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus { species: "O".into(), atomic_number: 8, coordinates: [-1.16, 0.0, 0.0] },
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [0.0,  0.0, 0.0]   },
+                    Nucleus { species: "O".into(), atomic_number: 8, coordinates: [ 1.16, 0.0, 0.0] },
+                ],
+                num_electrons: 22,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [-1.16, 0.0, 0.0], alpha: 23.808861 }),
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0],    alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [1.16, 0.0, 0.0],   alpha: 23.808861 }),
+                ],
+                points_per_axis: 28,
+                tolerance: 1e-1,
+            },
+        );
+
+        m.insert(
+            "water".into(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus { species: "O".into(), atomic_number: 8, coordinates: [0.0, 0.0, 0.0] },
+                    // coordinates computed with OH = 0.9572 Å, H-O-H = 104.45
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 0.7565922909,  0.5863445619, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-0.7565922909,  0.5863445619, 0.0] },
+                ],
+                num_electrons: 10,
+                basis: vec![
+                    // O
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 130.70932 }),
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 23.808861 }),
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 6.4436083 }),
+                    // H (each)
+                    Box::new(GaussianBasis { center: [ 0.7565922909, 0.5863445619, 0.0], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [ 0.7565922909, 0.5863445619, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [ 0.7565922909, 0.5863445619, 0.0], alpha: 0.1688554 }),
+
+                    Box::new(GaussianBasis { center: [-0.7565922909, 0.5863445619, 0.0], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [-0.7565922909, 0.5863445619, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-0.7565922909, 0.5863445619, 0.0], alpha: 0.1688554 }),
+                ],
+                points_per_axis: 48,
+                tolerance: 1e-1,
+            },
+        );
+
+        m.insert(
+            "water_low_res".into(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus { species: "O".into(), atomic_number: 8, coordinates: [0.0, 0.0, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 0.7565922909,  0.5863445619, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-0.7565922909,  0.5863445619, 0.0] },
+                ],
+                num_electrons: 10,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 23.808861 }),
+                    Box::new(GaussianBasis { center: [ 0.7565922909, 0.5863445619, 0.0], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-0.7565922909, 0.5863445619, 0.0], alpha: 0.62391373 }),
+                ],
+                points_per_axis: 20,
+                tolerance: 1e-1,
+            },
+        );
+
+        // --- Methane (CH4) ---
+        m.insert(
+            "methane".into(),
+            SimulationConfig {
+                nuclei: {
+                    let mut v = Vec::new();
+                    v.push(Nucleus { species: "C".into(), atomic_number: 6, coordinates: [0.0, 0.0, 0.0] });
+                    // Tetrahedral H positions (CH = 1.09 Å) (approx)
+                    v.push(Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 0.6293117934,  0.6293117934,  0.6293117934] });
+                    v.push(Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 0.6293117934, -0.6293117934, -0.6293117934] });
+                    v.push(Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-0.6293117934,  0.6293117934, -0.6293117934] });
+                    v.push(Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-0.6293117934, -0.6293117934,  0.6293117934] });
+                    v
+                },
+                num_electrons: 10,
+                basis: vec![
+                    // Carbon
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 71.6168370 }),
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [0.0, 0.0, 0.0], alpha: 3.5305122 }),
+                    // Hydrogens
+                    Box::new(GaussianBasis { center: [ 0.6293117934,  0.6293117934,  0.6293117934], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [ 0.6293117934, -0.6293117934, -0.6293117934], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [-0.6293117934,  0.6293117934, -0.6293117934], alpha: 3.42525091 }),
+                    Box::new(GaussianBasis { center: [-0.6293117934, -0.6293117934,  0.6293117934], alpha: 3.42525091 }),
+                ],
+                points_per_axis: 48,
+                tolerance: 1e-1,
+            },
+        );
+
+        m.insert(
+            "methane_low_res".into(),
+            SimulationConfig {
+                nuclei: vec![
+                    Nucleus { species: "C".into(), atomic_number: 6, coordinates: [0.0, 0.0, 0.0] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 0.6293117934,  0.6293117934,  0.6293117934] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [ 0.6293117934, -0.6293117934, -0.6293117934] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-0.6293117934,  0.6293117934, -0.6293117934] },
+                    Nucleus { species: "H".into(), atomic_number: 1, coordinates: [-0.6293117934, -0.6293117934,  0.6293117934] },
+                ],
+                num_electrons: 10,
+                basis: vec![
+                    Box::new(GaussianBasis { center: [0.0,0.0,0.0], alpha: 13.0450960 }),
+                    Box::new(GaussianBasis { center: [ 0.6293117934,  0.6293117934,  0.6293117934], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [ 0.6293117934, -0.6293117934, -0.6293117934], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-0.6293117934,  0.6293117934, -0.6293117934], alpha: 0.62391373 }),
+                    Box::new(GaussianBasis { center: [-0.6293117934, -0.6293117934,  0.6293117934], alpha: 0.62391373 }),
+                ],
+                points_per_axis: 24,
+                tolerance: 1e-1,
             },
         );
 
